@@ -86,6 +86,7 @@ data class WeiboUserProfile(
     val statuses: Int = 0,
     val following: Boolean = false,
     val gender: String = "m",
+    val location: String? = null,
 )
 
 /** 评论(comments/show) */
@@ -185,13 +186,19 @@ object TimelineParser {
 }
 
 object CardlistParser {
-    /** media_info 多档流 → 清晰度列表(高到低;m3u8 兜底“自动”) */
+    /** media_info 多档流 → 清晰度列表(高到低;m3u8 兜底“自动”)。
+     *  2026 热门流实测字段:mp4_720p_mp4 / stream_url(_hd) / h265_* / mp4_*_url 与旧键组并存 */
     private val QUALITY_KEYS = listOf(
         "mp4_1080p_mp4" to "1080P",
         "mp4_720p_mp4" to "720P",
+        "h265_mp4_hd" to "高清·H265",
         "mp4_hd_mp4" to "高清",
+        "mp4_hd_url" to "高清",
         "mp4_sd_mp4" to "标清",
+        "mp4_sd_url" to "标清",
+        "h265_mp4_ld" to "流畅·H265",
         "mp4_ld_mp4" to "流畅",
+        "stream_url_hd" to "自动高清",
         "stream_url" to "自动",
     )
 

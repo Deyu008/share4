@@ -39,25 +39,26 @@ import com.deyu.share.ui.Routes
 import com.deyu.share.ui.components.Avatar
 import com.deyu.share.ui.components.WeiboCard
 import com.deyu.share.ui.components.cardNavOf
-import com.deyu.share4.protocol.WeiboClient
 import com.deyu.share4.protocol.WeiboMblog
+import com.deyu.share4.protocol.WeiboUserProfile
 import kotlinx.coroutines.launch
 
-/** 「我」页:自己的资料摘要 + 我的微博流(profile/me + userTimeline) */
+/** 「我」页:自己的资料摘要 + 我的微博流(users/show + userTimeline) */
 @Composable
 fun MePage(nav: NavController) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val cardNav = remember { cardNavOf(nav) }
     val session = AppState.session
-    var profile by remember { mutableStateOf<WeiboClient.Profile?>(null) }
+    // profile/me 的 mineinfo 已不返回计数字段(2026-10-21 实测),计数统一走 users/show
+    var profile by remember { mutableStateOf<WeiboUserProfile?>(null) }
     var myPosts by remember { mutableStateOf<List<WeiboMblog>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
     LaunchedEffect(session?.uid) {
         if (session != null) {
             scope.launch {
-                profile = runCatching { AppState.client.profile() }.getOrNull()
+                profile = runCatching { AppState.client.userProfile(session.uid) }.getOrNull()
                 myPosts = runCatching { AppState.client.userTimeline(session.uid) }
                     .getOrDefault(emptyList())
                 loading = false

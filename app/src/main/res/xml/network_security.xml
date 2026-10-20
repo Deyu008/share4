@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 微博系 CDN 仍大量下发 http:// 视频/图片地址(f.video.weibocdn.com 等),
+     仅对这些域放行明文,其余保持禁用。 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">weibocdn.com</domain>
+        <domain includeSubdomains="true">weibo.cn</domain>
+        <domain includeSubdomains="true">weibo.com</domain>
+        <domain includeSubdomains="true">sinaimg.cn</domain>
+        <domain includeSubdomains="true">sinajs.cn</domain>
+        <domain includeSubdomains="true">miaopai.com</domain>
+    </domain-config>
+</network-security-config>

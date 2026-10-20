@@ -34,9 +34,7 @@ class WeiboClient(
         const val KEY_HASH = "7d3d1dd67023b838aa54241aea6fe799" // md5(Share 原证书 DER)
         const val WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0"
 
-        /** 主页关注流(2026-10 实测):C6991tb ordinal=2 → 230869{uid}_-_mix */
-        fun cidHome(uid: String): String = "230869${uid}_-_mix"
-        /** 热门·日榜(C6991tb/HotStatusActivity,2026-10 实测可用) */
+        /** 主页关注流(2026-10-21 纠错:不走 cardlist,见 friendsTimeline) */
         const val CID_HOT = "102803_ctg1_8999_-_ctg1_8999_home"
         /** 热榜入口(仅壳,无内容流) */
         const val CID_HOTLIST = "230413"
@@ -394,19 +392,40 @@ class WeiboClient(
     class ApiError(val errno: Int, val errmsg: String) : Exception("$errmsg($errno)")
 
     suspend fun timeline(containerId: String? = null, page: Int = 1): List<WeiboMblog> {
-        val cid = containerId ?: cidHome(session?.uid ?: "")
+        val cid = containerId ?: CID_HOT
         val raw = cardlist(cid, page)
         val obj = WeiboJson.parse(raw)
         val errno = obj?.int("errno")
         if (errno != null && errno != 0) {
-            // -200:业务层(身份已过)——无好友流等情况降级日榜
-            if (errno == -200) {
+            // -200:业务层(身份已过)——热榜容器等异常时降级日榜
+            if (errno == -200 && cid != CID_HOT) {
                 return timeline(CID_HOT, page)
             }
             throw ApiError(errno, obj?.str("errmsg") ?: "未知错误")
         }
         return CardlistParser.parse(raw)
     }
+
+    /**
+     * 关注时间线(主页“关注”tab)。cardlist 的 230869{uid}_-_mix 是“我的赞”(C6991tb MY_LIKE,
+     * 2026-10-21 纠错),关注流真身是 statuses/friends_timeline(statuses[] + page 分页)。
+     */
+    suspend fun friendsTimeline(page: Int = 1, count: Int = 25): List<WeiboMblog> =
+        withContext(Dispatchers.IO) {
+            ensureAid()
+            val q = commonParams(authed = true)
+            q["count"] = count.toString()
+            q["page"] = page.toString()
+            applyCum("/2/statuses/friends_timeline", q)
+            val raw = execText(baseRequestBuilder()
+                .url(buildUrl("statuses/friends_timeline", q)).get().build())
+            val obj = WeiboJson.parse(raw)
+            val errno = obj?.int("errno")
+            if (errno != null && errno != 0) {
+                throw ApiError(errno, obj?.str("errmsg") ?: "friendsTimeline 失败")
+            }
+            TimelineParser.parse(raw)
+        }
 
     // ---------- 图片发博·开放平台两步流(2026-10 端点确认:cn 端内联已关闭) ----------
     // ① POST upload.api.weibo.com/2/mss/upload.json  multipart(pic) + access_token → pic_id
@@ -538,6 +557,7 @@ class WeiboClient(
                 following = o.str("following")?.toBooleanStrictOrNull()
                     ?: (o.int("follow_me") == 1),
                 gender = o.str("gender") ?: "m",
+                location = o.str("location"),
             )
         }
     }

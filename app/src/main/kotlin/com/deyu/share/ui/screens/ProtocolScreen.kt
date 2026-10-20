@@ -53,14 +53,12 @@ fun ProtocolScreen(nav: NavController) {
                 OutlinedButton(enabled = !busy, onClick = {
                     busy = true; scope.launch {
                         try {
-                            val cid = com.deyu.share4.protocol.WeiboClient.cidHome(
-                                client.session?.uid ?: "")
-                            append("→ cardlist 首页(containerid=$cid)…")
-                            val raw = client.cardlist(cid)
-                            append(raw.take(300))
+                            append("→ 关注流(friends_timeline)…")
+                            val list = client.friendsTimeline()
+                            append("✓ ${list.size} 条,首条作者:${list.firstOrNull()?.userName ?: "无"}")
                         } catch (e: Exception) { append("✗ ${e.message}") }
                         busy = false }
-                }) { Text("cardlist") }
+                }) { Text("关注流") }
             }
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(

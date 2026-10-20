@@ -62,11 +62,17 @@ fun VideoScreen(nav: NavController) {
     var qi by remember { mutableIntStateOf(0) }
 
     val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(qualities.firstOrNull()?.url ?: ""))
-            prepare()
-            playWhenReady = true
-        }
+        // weibocdn 防盗链:必须用微博 App 格式 UA(device.ua),普通浏览器 UA 会被 403
+        val http = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setUserAgent(com.deyu.share.data.AppState.client.device.ua)
+            .setAllowCrossProtocolRedirects(true)
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(http))
+            .build().apply {
+                setMediaItem(MediaItem.fromUri(qualities.firstOrNull()?.url ?: ""))
+                prepare()
+                playWhenReady = true
+            }
     }
     DisposableEffect(Unit) {
         onDispose {

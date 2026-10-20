@@ -101,11 +101,11 @@ fun TimelineScreen(nav: NavController) {
                 banner = "未登录 · 演示数据"
             } else {
                 try {
-                    val cid = if (tab == 0)
-                        WeiboClient.cidHome(AppState.session?.uid ?: "")
-                    else WeiboClient.CID_HOT
-                    if (reset) android.util.Log.d("Share4Tl", "load tab=$tab cid=$cid")
-                    val list = AppState.client.timeline(cid, page = pageNo)
+                    if (reset) android.util.Log.d("Share4Tl", "load tab=$tab page=$pageNo")
+                    val list = if (tab == 0)
+                        AppState.client.friendsTimeline(page = pageNo)
+                    else
+                        AppState.client.timeline(WeiboClient.CID_HOT, page = pageNo)
                     android.util.Log.d("Share4Tl", "page $pageNo ok: ${list.size} items")
                     items = if (reset) list else {
                         val seen = items.map { it.mid }.toSet()
