@@ -53,8 +53,10 @@ fun ProtocolScreen(nav: NavController) {
                 OutlinedButton(enabled = !busy, onClick = {
                     busy = true; scope.launch {
                         try {
-                            append("→ cardlist 首页(containerid=${com.deyu.share4.protocol.WeiboClient.CID_HOME})…")
-                            val raw = client.cardlist(com.deyu.share4.protocol.WeiboClient.CID_HOME)
+                            val cid = com.deyu.share4.protocol.WeiboClient.cidHome(
+                                client.session?.uid ?: "")
+                            append("→ cardlist 首页(containerid=$cid)…")
+                            val raw = client.cardlist(cid)
                             append(raw.take(300))
                         } catch (e: Exception) { append("✗ ${e.message}") }
                         busy = false }

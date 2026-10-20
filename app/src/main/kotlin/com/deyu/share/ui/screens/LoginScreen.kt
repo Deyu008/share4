@@ -192,7 +192,11 @@ fun LoginScreen(nav: NavController) {
                         java.io.File(ctx.filesDir, "login_raw.json").writeText(r.raw)
                     }
                     if (r.session != null) {
-                        AppState.login(r.session!!, ctx)
+                        // 持久化 phone(短信流)/account(密码流)+sut:getoauth 续期链依赖
+                        val withCreds = if (smsMode)
+                            r.session!!.copy(phone = smsChallenge?.phone ?: r.session!!.phone)
+                        else r.session!!.copy(phone = account.trim())
+                        AppState.login(withCreds, ctx)
                         onSuccess()
                     } else {
                         // errno=0 但未解析出会话:展示原始响应便于诊断字段名

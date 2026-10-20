@@ -16,10 +16,10 @@ object AppState {
         client.restoreSession(SessionStore.loadSession(ctx))
         client.aid = SessionStore.loadAid(ctx)
         client.onAidChanged = { SessionStore.saveAid(ctx, it) }
-        // cum 桥:patched libwbutil(证书守卫恒真)
+        // cum 桥:纯 Kotlin 实现(零 IV SHA-256,2026-10 破解)——与签名无关,任何证书可用
         client.cumProvider = { path ->
-            val c = com.sina.weibo.utils.NetCheckUtils.cum(path)
-            android.util.Log.d("Share4Cum", "cum=" + c + " path=" + path)
+            val c = com.deyu.share4.protocol.WeiboCrypto.cum(path)
+            android.util.Log.d("Share4Cum", "cum=$c path=$path")
             c
         }
     }
