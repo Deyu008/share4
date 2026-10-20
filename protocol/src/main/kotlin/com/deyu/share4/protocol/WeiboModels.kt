@@ -177,11 +177,20 @@ data class WeiboMblog(
 }
 
 object TimelineParser {
-    /** 解析 api.weibo.com/2/statuses/home_timeline.json 的 statuses[] */
+    /**
+     * 解析 statuses[](friends_timeline / mentions)。
+     * 服务端会往关注流里插广告/推荐位(2026-10-21 实测:30 条混 5 条,
+     * 标记为 mblogtype≠0 / ad_state≠0 / 携带 promotion 字段),剔除。
+     */
     fun parse(raw: String): List<WeiboMblog> {
         val root = WeiboJson.parse(raw) ?: return emptyList()
         val arr = root["statuses"]?.jsonArray ?: return emptyList()
-        return arr.map { CardlistParser.parseMblog(it.jsonObject) }
+        return arr.mapNotNull { el ->
+            val o = el.jsonObject
+            val injected = (o.int("mblogtype") ?: 0) != 0 ||
+                (o.int("ad_state") ?: 0) != 0 || o.containsKey("promotion")
+            if (injected) null else CardlistParser.parseMblog(o)
+        }
     }
 }
 

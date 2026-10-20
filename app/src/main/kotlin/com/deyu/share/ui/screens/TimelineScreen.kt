@@ -172,9 +172,11 @@ fun TimelineScreen(nav: NavController) {
                 }
             }
         } else
-            AnimatedContent(targetState = Pair(tab, items), transitionSpec = {
+            // 只以 tab 为转场 key:加载更多追加 items 时不再整表重建动画(滚动卡顿主因)
+            AnimatedContent(targetState = tab, transitionSpec = {
                 fadeIn(tween(260)).togetherWith(fadeOut(tween(160)))
-            }, label = "tabContent") { (t, list) ->
+            }, label = "tabContent") { t ->
+                val list = items
                 if (list.isEmpty() && loading) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(strokeWidth = 2.5.dp,
