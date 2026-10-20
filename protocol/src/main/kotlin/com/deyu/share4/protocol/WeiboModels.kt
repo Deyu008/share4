@@ -22,6 +22,7 @@ data class LoginSession(
     val sut: String? = null,          // 登录响应 sut 凭据(备用)
     val phone: String? = null,        // 登录手机号(getoauth 刷新签名用)
     val webSub: String? = null,       // 登录响应 cookie.cookie[".weibo.cn"] 的 SUB(WebView 混合通道)
+    val webSubCom: String? = null,    // 登录响应 cookie.cookie[".weibo.com"] 的 SUB(weibo.com ajax 通道:热搜榜)
     val tokenIssuedAt: Long = 0,      // oauth2.0 token 签发时间(秒)
     val tokenExpires: Long = 0,       // 有效期(秒,登录响应 expires)
 )
@@ -58,6 +59,8 @@ object WeiboJson {
             sut = o.str("sut"),
             webSub = o["cookie"]?.jsonObject?.get("cookie")?.jsonObject
                 ?.str(".weibo.cn")?.substringAfter("SUB=")?.substringBefore(";"),
+            webSubCom = o["cookie"]?.jsonObject?.get("cookie")?.jsonObject
+                ?.str(".weibo.com")?.substringAfter("SUB=")?.substringBefore(";"),
             tokenIssuedAt = o.str("oauth2.0", "issued_at")?.toLongOrNull() ?: 0,
             tokenExpires = o.str("oauth2.0", "expires")?.toLongOrNull() ?: 0,
         )
@@ -67,6 +70,79 @@ object WeiboJson {
 /** 视频清晰度档位(page_info.media_info 多档流) */
 @Serializable
 data class VideoQuality(val label: String, val url: String)
+
+
+/** 用户资料(users/show) */
+@Serializable
+data class WeiboUserProfile(
+    val uid: String,
+    val screenName: String,
+    val avatarHd: String? = null,
+    val verified: Boolean = false,
+    val verifiedReason: String? = null,
+    val description: String = "",
+    val followers: Int = 0,
+    val friends: Int = 0,
+    val statuses: Int = 0,
+    val following: Boolean = false,
+    val gender: String = "m",
+)
+
+/** 评论(comments/show) */
+@Serializable
+data class WeiboComment(
+    val mid: String,
+    val text: String,
+    val createdAt: String,
+    val userName: String,
+    val avatar: String? = null,
+    val likeCount: Int = 0,
+)
+
+/** 热搜词(weibo.com/ajax/side/hotSearch 的 realtime[]) */
+@Serializable
+data class HotWord(
+    val rank: Int,
+    val word: String,
+    val heat: Int = 0,
+    val label: String? = null,       // "新"/"热"/"爆" 等角标
+)
+
+object HotSearchParser {
+    fun parse(raw: String): List<HotWord> {
+        val root = WeiboJson.parse(raw) ?: return emptyList()
+        val arr = root["data"]?.jsonObject?.get("realtime")?.jsonArray ?: return emptyList()
+        return arr.mapNotNull { el ->
+            val o = el as? JsonObject ?: return@mapNotNull null
+            val word = o.str("word") ?: return@mapNotNull null
+            HotWord(
+                rank = o.int("rank") ?: 0,
+                word = word,
+                heat = o.str("num")?.toIntOrNull() ?: 0,
+                label = o.str("label_name")?.ifBlank { null },
+            )
+        }
+    }
+}
+
+object CommentParser {
+    fun parse(raw: String): List<WeiboComment> {
+        val root = WeiboJson.parse(raw) ?: return emptyList()
+        val arr = root["data"]?.jsonArray ?: root["comments"]?.jsonArray ?: return emptyList()
+        return arr.mapNotNull { el ->
+            val c = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+            val u = c["user"]?.jsonObject
+            WeiboComment(
+                mid = c.str("mid") ?: c.str("id") ?: "",
+                text = c.str("text") ?: "",
+                createdAt = c.str("created_at") ?: "",
+                userName = u?.str("screen_name") ?: "",
+                avatar = u?.str("avatar_hd") ?: u?.str("profile_image_url"),
+                likeCount = c.int("like_count") ?: 0,
+            )
+        }
+    }
+}
 
 /** cardlist → 扁平微博卡片(字段对齐 cardlist mblog JSON) */
 @Serializable
@@ -109,7 +185,7 @@ object TimelineParser {
 }
 
 object CardlistParser {
-    /** media_info 多档流 → 清晰度列表(高到低;m3u8 兜底"自动") */
+    /** media_info 多档流 → 清晰度列表(高到低;m3u8 兜底“自动”) */
     private val QUALITY_KEYS = listOf(
         "mp4_1080p_mp4" to "1080P",
         "mp4_720p_mp4" to "720P",

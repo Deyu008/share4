@@ -32,6 +32,7 @@ class WeiboClient(
         const val APPKEY_AID = "7501641714"  // guest/login 的 appkey(C6714qB)
         const val AID_FROM = "1299295010"    // weicoabroad 分支 from(C6714qB.O00000o0)
         const val KEY_HASH = "7d3d1dd67023b838aa54241aea6fe799" // md5(Share 原证书 DER)
+        const val WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0"
 
         /** 主页关注流(2026-10 实测):C6991tb ordinal=2 → 230869{uid}_-_mix */
         fun cidHome(uid: String): String = "230869${uid}_-_mix"
@@ -489,10 +490,16 @@ class WeiboClient(
         )
     }
 
-    /** 个人微博列表(C7292xB:107603{uid}__-_WEIBO_SECOND_PROFILE_WEIBO,已实测) */
+    /** 个人微博列表:230413 容器为主(jadx C7292xB 实测校准),首页为空时回退旧 107603 布局 */
     suspend fun userTimeline(uid: String, page: Int = 1): List<WeiboMblog> {
+        val list = userTimelineBy(cidProfileWeibos(uid), page)
+        if (list.isNotEmpty() || page > 1) return list
+        return userTimelineBy("107603${uid}__-_WEIBO_SECOND_PROFILE_WEIBO", page)
+    }
+
+    private suspend fun userTimelineBy(cid: String, page: Int): List<WeiboMblog> {
         val q = commonParams(authed = true)
-        q["containerid"] = "107603${uid}__-_WEIBO_SECOND_PROFILE_WEIBO"
+        q["containerid"] = cid
         q["page"] = page.toString()
         q["count"] = "10"
         applyCum("/2/cardlist", q)
@@ -501,6 +508,103 @@ class WeiboClient(
         val errno = obj?.int("errno")
         if (errno != null && errno != 0) throw ApiError(errno, obj?.str("errmsg") ?: "userTimeline 失败")
         return CardlistParser.parse(raw)
+    }
+
+
+    // ---------- 用户主页 / 关注 / 详情 / 评论 / 热搜(2026-10-21 复刻推进) ----------
+
+    /** 主页微博流 containerid(jadx C7292xB.O00000O:230413{uid}_-_WEIBO_SECOND_PROFILE_WEIBO) */
+    fun cidProfileWeibos(uid: String): String = "230413${uid}_-_WEIBO_SECOND_PROFILE_WEIBO"
+
+    /** 用户资料(api.weibo.cn/2/users/show,已登录签名链) */
+    suspend fun userProfile(uid: String): WeiboUserProfile? = withContext(Dispatchers.IO) {
+        ensureAid()
+        val q = commonParams(authed = true)
+        q["uid"] = uid
+        applyCum("/2/users/show", q)
+        val text = execText(baseRequestBuilder().url(buildUrl("users/show", q)).get().build())
+        WeiboJson.parse(text)?.let { o ->
+            if (o.str("uid") == null && o.str("id") == null) return@let null
+            WeiboUserProfile(
+                uid = o.str("uid") ?: o.str("id") ?: uid,
+                screenName = o.str("screen_name") ?: "",
+                avatarHd = o.str("avatar_hd") ?: o.str("profile_image_url"),
+                verified = o.str("verified")?.toBooleanStrictOrNull() ?: false,
+                verifiedReason = o.str("verified_reason"),
+                description = o.str("description") ?: "",
+                followers = o.int("followers_count") ?: 0,
+                friends = o.int("friends_count") ?: 0,
+                statuses = o.int("statuses_count") ?: 0,
+                following = o.str("following")?.toBooleanStrictOrNull()
+                    ?: (o.int("follow_me") == 1),
+                gender = o.str("gender") ?: "m",
+            )
+        }
+    }
+
+    /** 关注 / 取关(Jz:friendships/create|destroy,POST uid) */
+    suspend fun friendship(uid: String, create: Boolean): Boolean = withContext(Dispatchers.IO) {
+        ensureAid()
+        val q = commonParams(authed = true)
+        q["uid"] = uid
+        applyCum(if (create) "/2/friendships/create" else "/2/friendships/destroy", q)
+        val resp = http.newCall(
+            baseRequestBuilder().url(buildUrl(if (create) "friendships/create" else "friendships/destroy", q))
+                .post("".toRequestBody(null)).build()
+        ).execute()
+        val obj = WeiboJson.parse(resp.body!!.string())
+        (obj?.int("errno") ?: 0) == 0
+    }
+
+    /** 微博详情(statuses/show,id=mid;返回体即 mblog 本体,与时间线卡片同构) */
+    suspend fun statusDetail(mid: String): WeiboMblog? = withContext(Dispatchers.IO) {
+        ensureAid()
+        val q = commonParams(authed = true)
+        q["id"] = mid
+        applyCum("/2/statuses/show", q)
+        val text = execText(baseRequestBuilder().url(buildUrl("statuses/show", q)).get().build())
+        val obj = WeiboJson.parse(text) ?: return@withContext null
+        if (obj.str("mid") == null && obj.str("id") == null) null else CardlistParser.parseMblog(obj)
+    }
+
+    /** 评论流(comments/show,id=mid,page) */
+    suspend fun comments(mid: String, page: Int = 1): List<WeiboComment> = withContext(Dispatchers.IO) {
+        ensureAid()
+        val q = commonParams(authed = true)
+        q["id"] = mid; q["page"] = page.toString(); q["count"] = "20"
+        applyCum("/2/comments/show", q)
+        val text = execText(baseRequestBuilder().url(buildUrl("comments/show", q)).get().build())
+        CommentParser.parse(text)
+    }
+
+    /** 发评论(comments/create) */
+    suspend fun commentCreate(mid: String, comment: String): ApiResult = withContext(Dispatchers.IO) {
+        ensureAid()
+        val q = commonParams(authed = true)
+        q["id"] = mid; q["comment"] = comment
+        applyCum("/2/comments/create", q)
+        val resp = http.newCall(
+            baseRequestBuilder().url(buildUrl("comments/create", q))
+                .post("".toRequestBody(null)).build()
+        ).execute()
+        parseResult(resp.code, resp.body!!.string())
+    }
+
+    /**
+     * 热搜榜:原 106003 容器 2026 服务端已下线(cardlist -200 无此业务配置),
+     * m.weibo.cn 容器接口同步 SPA 化;改走 weibo.com/ajax/side/hotSearch,
+     * 凭据为登录响应 crossdomain 的 .weibo.com SUB(会话缺票据时返回空)。
+     */
+    suspend fun hotSearch(): List<HotWord> = withContext(Dispatchers.IO) {
+        val sub = session?.webSubCom ?: return@withContext emptyList()
+        val req = Request.Builder()
+            .url("https://weibo.com/ajax/side/hotSearch")
+            .header("User-Agent", WEB_UA)
+            .header("Referer", "https://weibo.com/")
+            .header("Cookie", "SUB=$sub")
+            .get().build()
+        val text = http.newCall(req).execute().use { it.body?.string() ?: "" }
+        HotSearchParser.parse(text)
     }
 
     // ---------- 通知(2026-10-20 实测:@我的 + 未读数) ----------
