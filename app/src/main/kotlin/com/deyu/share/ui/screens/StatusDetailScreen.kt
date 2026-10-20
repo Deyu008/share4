@@ -52,6 +52,7 @@ import com.deyu.share.ui.components.CardNav
 import com.deyu.share.ui.components.WeiboCard
 import com.deyu.share.ui.components.cardNavOf
 import com.deyu.share.ui.components.formatCount
+import com.deyu.share.ui.components.formatRelativeTime
 import com.deyu.share.ui.components.stripHtml
 import com.deyu.share4.protocol.WeiboComment
 import com.deyu.share4.protocol.WeiboMblog
@@ -268,7 +269,7 @@ private fun CommentItem(c: WeiboComment) {
                     modifier = Modifier.weight(1f, fill = false),
                     color = MaterialTheme.colorScheme.secondary)
                 Spacer(Modifier.width(6.dp))
-                Text("· ${c.createdAt.take(20)}",
+                Text("· ${formatRelativeTime(c.createdAt)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

@@ -67,7 +67,7 @@ fun NotificationsPage(nav: NavController) {
                 Text("暂无 @我的 微博", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
-            LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
+            LazyColumn(contentPadding = PaddingValues(bottom = 12.dp)) {
                 items(mentions, key = { it.mid }) { m ->
                     WeiboCard(m, cardNav, Modifier.padding(horizontal = 6.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,

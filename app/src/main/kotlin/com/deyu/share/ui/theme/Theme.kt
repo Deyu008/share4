@@ -14,40 +14,45 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.deyu.share.data.SettingsStore
 
-// X 式克制造型:白底、近黑文字、weibo 橙仅用于主操作,其余一律弱化
-private val WeiboOrange = Color(0xFFE8821E)
-private val WeiboOrangePressed = Color(0xFFD9730F)
-private val Ink = Color(0xFF0F1419)          // X 的近黑
-private val InkSecondary = Color(0xFF536471)  // X 的次级灰
-private val Hairline = Color(0xFFEFF3F4)      // X 的分割线
-private val SurfaceTint = Color(0xFFF7F9F9)   // X 的浅灰面
+// Share 配色:白底 + 微博蓝主操作,夜间深蓝灰(原版 Share 的 Material 蓝系观感)
+private val WeiboBlue = Color(0xFF2861AD)
+private val WeiboBluePressed = Color(0xFF1F4F8F)
+private val Ink = Color(0xFF333333)          // Share 的正文墨色
+private val InkSecondary = Color(0xFF8A8A8A)  // 次级灰
+private val Hairline = Color(0xFFE9E9E9)
+private val SurfaceTint = Color(0xFFF5F6F8)
 
 private val LightScheme = lightColorScheme(
-    primary = WeiboOrange,
+    primary = WeiboBlue,
+    primaryContainer = Color(0xFFDCE7F5),
     onPrimary = Color.White,
-    secondary = Color(0xFF1D9BF0),
-    background = Color.White,
+    secondary = Color(0xFFE8821E),   // 微博橙保留给点赞/热搜等强调位
+    onSecondary = Color.White,
+    background = Color(0xFFF7F8FA),
     onBackground = Ink,
     surface = Color.White,
     onSurface = Ink,
     surfaceVariant = SurfaceTint,
     onSurfaceVariant = InkSecondary,
     outlineVariant = Hairline,
-    error = Color(0xFFF4212E),
+    error = Color(0xFFE2413E),
 )
 
 private val DarkScheme = darkColorScheme(
-    primary = Color(0xFFFF9E2C),
-    onPrimary = Color(0xFF1A1000),
-    secondary = Color(0xFF1D9BF0),
-    background = Color(0xFF000000),   // X 真黑
-    onBackground = Color(0xFFE7E9EA),
-    surface = Color(0xFF000000),
-    onSurface = Color(0xFFE7E9EA),
-    surfaceVariant = Color(0xFF16181C),
-    onSurfaceVariant = Color(0xFF71767B),
-    outlineVariant = Color(0xFF2F3336),
+    primary = Color(0xFF7FA6E0),
+    primaryContainer = Color(0xFF2C3A52),
+    onPrimary = Color(0xFF0B1626),
+    secondary = Color(0xFFFF9E2C),
+    onSecondary = Color(0xFF1A1000),
+    background = Color(0xFF10141B),   // Share 夜间:深蓝灰而非纯黑
+    onBackground = Color(0xFFDCE1E8),
+    surface = Color(0xFF171C25),
+    onSurface = Color(0xFFDCE1E8),
+    surfaceVariant = Color(0xFF1F2530),
+    onSurfaceVariant = Color(0xFF8B93A1),
+    outlineVariant = Color(0xFF2A3140),
     error = Color(0xFFF4212E),
 )
 
@@ -60,9 +65,19 @@ private val Type = Typography(
     labelSmall = TextStyle(fontSize = 12.sp),
 )
 
+/**
+ * 应用主题:夜间模式三态(跟随系统/浅色/深色,对应原版“默认夜间主题”设置组)。
+ */
 @Composable
-fun Share4Theme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    // 固定品牌配色(不用动态取色,保证微博橙主色与真黑夜间)
-    val colorScheme = if (darkTheme) DarkScheme else LightScheme
-    MaterialTheme(colorScheme = colorScheme, typography = Type, content = content)
+fun Share4Theme(content: @Composable () -> Unit) {
+    val darkTheme = when (SettingsStore.darkMode) {
+        SettingsStore.DarkMode.LIGHT -> false
+        SettingsStore.DarkMode.DARK -> true
+        SettingsStore.DarkMode.SYSTEM -> isSystemInDarkTheme()
+    }
+    MaterialTheme(
+        colorScheme = if (darkTheme) DarkScheme else LightScheme,
+        typography = Type,
+        content = content,
+    )
 }

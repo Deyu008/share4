@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.deyu.share.data.AppState
+import com.deyu.share.data.SettingsStore
 import com.deyu.share.ui.AppNav
 import com.deyu.share.ui.theme.Share4Theme
 
@@ -17,6 +18,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         AppState.init(applicationContext)
+        SettingsStore.init(applicationContext)
         setContent {
             Share4Theme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

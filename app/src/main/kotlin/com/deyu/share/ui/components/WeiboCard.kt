@@ -60,6 +60,8 @@ import com.deyu.share4.protocol.WeiboMblog
 import kotlinx.coroutines.launch
 import android.widget.Toast
 
+/** 相对时间(刚刚/N分钟前),见 components/Time.kt */
+
 /**
  * 微博卡片的导航回调集合:卡片本身不持有 NavController,
  * 由各页面注入(详情页可覆写 openDetail 为空实现避免自跳)。
@@ -107,7 +109,8 @@ fun WeiboCard(m: WeiboMblog, cardNav: CardNav, modifier: Modifier = Modifier) {
                         tint = Color(0xFFE8821E))
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("· ${m.createdAt.take(20)}", style = MaterialTheme.typography.labelSmall,
+                Text("· ${formatRelativeTime(m.createdAt)}",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(2.dp))
