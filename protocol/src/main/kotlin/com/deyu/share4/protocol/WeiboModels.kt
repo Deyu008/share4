@@ -18,7 +18,8 @@ data class LoginSession(
     val screenName: String? = null,
     val avatarHd: String? = null,
     val oauthToken: String? = null,
-    val alt: String? = null,          // 长效免密重登凭据(WeiboWebAuthorizeActivity alt 流)
+    val alt: String? = null,          // 长效免密重登凭据(风控验证页 JSBridge 流才返回)
+    val sut: String? = null,          // 登录响应 sut 凭据(备用)
     val phone: String? = null,        // 登录手机号(getoauth 刷新签名用)
     val webSub: String? = null,       // 登录响应 cookie.cookie[".weibo.cn"] 的 SUB(WebView 混合通道)
     val tokenIssuedAt: Long = 0,      // oauth2.0 token 签发时间(秒)
@@ -54,6 +55,7 @@ object WeiboJson {
             avatarHd = o.str("userinfo", "avatar_hd") ?: o.str("userinfo", "profile_image_url"),
             oauthToken = o.str("oauth2.0", "access_token") ?: o.str("oauth", "access_token"),
             alt = o.str("alt"),
+            sut = o.str("sut"),
             webSub = o["cookie"]?.jsonObject?.get("cookie")?.jsonObject
                 ?.str(".weibo.cn")?.substringAfter("SUB=")?.substringBefore(";"),
             tokenIssuedAt = o.str("oauth2.0", "issued_at")?.toLongOrNull() ?: 0,

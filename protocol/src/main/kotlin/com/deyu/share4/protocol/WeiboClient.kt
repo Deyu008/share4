@@ -33,10 +33,14 @@ class WeiboClient(
         const val AID_FROM = "1299295010"    // weicoabroad 分支 from(C6714qB.O00000o0)
         const val KEY_HASH = "7d3d1dd67023b838aa54241aea6fe799" // md5(Share 原证书 DER)
 
-        /** 首页关注时间线 containerid(m.weibo.cn 同款;端到端时验证) */
-        const val CID_HOME = "107603"
-        /** 热门时间线 */
-        const val CID_HOT = "102803_ctg1_-9999_-_hotweibo"
+        /** 主页关注流(2026-10 实测):C6991tb ordinal=2 → 230869{uid}_-_mix */
+        fun cidHome(uid: String): String = "230869${uid}_-_mix"
+        /** 热门·日榜(C6991tb/HotStatusActivity,2026-10 实测可用) */
+        const val CID_HOT = "102803_ctg1_8999_-_ctg1_8999_home"
+        /** 热榜入口(仅壳,无内容流) */
+        const val CID_HOTLIST = "230413"
+        /** 旧版首页 containerid(服务端 -200,已废弃,勿用) */
+        const val CID_HOME_OLD = "107603"
 
         /** 发送/验码是否业务成功(errno 0 或缺失均视为成功) */
         fun ApiResult.businessOk(): Boolean = errno == null || errno == 0
@@ -79,8 +83,8 @@ class WeiboClient(
         if (authed) {
             session?.let {
                 p["gsid"] = it.gsid
-                // 原包已登录五件套:gsid + s=calc(uid)(脱壳=s=uid) + i + aid + cum
-                p["s"] = it.uid
+                // s = newCalculateS(uid):sha512 反馈索引(2026-10 破解,服务端实测通过)
+                p["s"] = WeiboCrypto.sApi(it.uid)
                 p["i"] = WeiboCrypto.iValue()
             }
         }
@@ -166,6 +170,11 @@ class WeiboClient(
                             val code: String, val number: String, val retcode: String?)
 
     private fun parseResult(code: Int, text: String, sms: SmsChallenge? = null): ApiResult {
+        // 登录响应原始抓包:确认 alt 字段真身(持久化后 token 可无限续期 → 图传即通)
+        // protocol 为纯 JVM 模块,println 会以 System.out 形式进 logcat
+        if (text.contains("gsid") || text.contains("access_token")) {
+            println("Share4Login raw (${text.length}B): ${text.take(1200)}")
+        }
         val obj = WeiboJson.parse(text)
         return ApiResult(
             httpCode = code,
@@ -325,13 +334,14 @@ class WeiboClient(
 
     /**
      * account/getoauth 刷新(旧包 C2052Zb weicoabroad 流):
-     * s = sNew(phone, PIN, "1299295010")(sha512 取位),换回全新 gsid + oauth2.0 token。
+     * s = 反馈索引 sApi(phone, weico PIN, "1299295010")(2026-10 修正:旧 sNew 索引规则错误),
+     * 换回全新 gsid + oauth2.0 token。
      */
     suspend fun getoauthRefresh(): ApiResult? {
         val phone = session?.phone ?: return null
         val q = LinkedHashMap<String, String>()
         q["c"] = "weicoabroad"
-        q["s"] = WeiboCrypto.sNew(phone, WeiboCrypto.PIN, AID_FROM)
+        q["s"] = WeiboCrypto.sApi(phone, AID_FROM, WeiboCrypto.PIN)
         q["i"] = WeiboCrypto.iValue()
         session?.gsid?.let { q["gsid"] = it }
         q["phone"] = phone
@@ -382,26 +392,209 @@ class WeiboClient(
     /** 服务端业务错误(-105 等),UI 层捕获展示 */
     class ApiError(val errno: Int, val errmsg: String) : Exception("$errmsg($errno)")
 
-    suspend fun timeline(containerId: String = CID_HOME, page: Int = 1): List<WeiboMblog> {
-        val raw = cardlist(containerId, page)
+    suspend fun timeline(containerId: String? = null, page: Int = 1): List<WeiboMblog> {
+        val cid = containerId ?: cidHome(session?.uid ?: "")
+        val raw = cardlist(cid, page)
         val obj = WeiboJson.parse(raw)
         val errno = obj?.int("errno")
         if (errno != null && errno != 0) {
+            // -200:业务层(身份已过)——无好友流等情况降级日榜
+            if (errno == -200) {
+                return timeline(CID_HOT, page)
+            }
             throw ApiError(errno, obj?.str("errmsg") ?: "未知错误")
         }
         return CardlistParser.parse(raw)
     }
 
-    // ---------- 发博(statuses/send multipart,参数布局见 PROTOCOL.md §7) ----------
+    // ---------- 图片发博·开放平台两步流(2026-10 端点确认:cn 端内联已关闭) ----------
+    // ① POST upload.api.weibo.com/2/mss/upload.json  multipart(pic) + access_token → pic_id
+    // ② POST api.weibo.com/2/statuses/upload.json     access_token + status + pic_id
+    // 需新鲜 token(300s):ensureFreshToken 依赖 alt(登录响应持久化)/phone 静默续期
+    suspend fun uploadPicMss(png: ByteArray): String? = withContext(Dispatchers.IO) {
+        ensureFreshToken()
+        val token = session?.oauthToken ?: return@withContext null
+        val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("access_token", token)
+            .addFormDataPart("pic", "share4.png",
+                png.toRequestBody("image/png".toMediaType()))
+            .build()
+        val req = baseRequestBuilder()
+            .url("https://upload.api.weibo.com/2/mss/upload.json")
+            .post(form).build()
+        val text = http.newCall(req).execute().use { it.body?.string() ?: "" }
+        WeiboJson.parse(text)?.str("pic_id") ?: WeiboJson.parse(text)?.str("picId")
+    }
+
+    suspend fun statusesUpload(status: String, picId: String): ApiResult = withContext(Dispatchers.IO) {
+        ensureFreshToken()
+        val token = session?.oauthToken ?: return@withContext ApiResult(0, -1, "未登录", "")
+        val form = FormBody.Builder()
+            .add("access_token", token)
+            .add("status", status)
+            .add("pic_id", picId)
+            .build()
+        val req = baseRequestBuilder()
+            .url("https://api.weibo.com/2/statuses/upload.json")
+            .post(form).build()
+        val text = http.newCall(req).execute().use { it.body?.string() ?: "" }
+        val obj = WeiboJson.parse(text)
+        ApiResult(200, obj?.int("error_code") ?: obj?.int("errno"),
+            obj?.str("error") ?: obj?.str("errmsg"), text)
+    }
+
+    /** 端到端:图 → pic_id → 带图发布 */
+    suspend fun postWithImage(status: String, png: ByteArray): ApiResult {
+        val picId = uploadPicMss(png) ?: return ApiResult(0, -1, "图片上传失败(需重新登录以激活 token)", "")
+        return statusesUpload(status, picId)
+    }
+
+    // ---------- 个人页(2026-10-20 实测:profile/me + 107603{uid}__-_WEIBO_SECOND_PROFILE_WEIBO) ----------
+
+    data class Profile(
+        val screenName: String = "",
+        val avatarHd: String? = null,
+        val description: String = "",
+        val followers: Int = 0,
+        val friends: Int = 0,
+        val statuses: Int = 0,
+        val verified: Boolean = false,
+        val verifiedReason: String? = null,
+        val cover: String? = null,
+        val gender: String? = null,
+        val location: String? = null,
+    )
+
+    suspend fun profile(uid: String? = null): Profile {
+        val q = commonParams(authed = true)
+        uid?.let { q["uid"] = it }
+        applyCum("/2/profile/me", q)
+        val raw = execText(baseRequestBuilder().url(buildUrl("profile/me", q)).get().build())
+        val obj = WeiboJson.parse(raw)
+        val errno = obj?.int("errno")
+        if (errno != null && errno != 0) throw ApiError(errno, obj?.str("errmsg") ?: "profile 失败")
+        val mi = obj?.get("mineinfo")?.let { it as? kotlinx.serialization.json.JsonObject } ?: return Profile()
+        return Profile(
+            screenName = mi.str("screen_name") ?: "",
+            avatarHd = mi.str("avatar_hd") ?: mi.str("profile_image_url"),
+            description = mi.str("description") ?: "",
+            followers = mi.str("followers_count")?.toIntOrNull() ?: 0,
+            friends = mi.str("friends_count")?.toIntOrNull() ?: 0,
+            statuses = mi.str("statuses_count")?.toIntOrNull() ?: 0,
+            verified = mi.str("verified") == "true" || mi.str("verified") == "1",
+            verifiedReason = mi.str("verified_reason"),
+            cover = mi.str("cover_image_phone") ?: mi.str("cover_image"),
+            gender = mi.str("gender"),
+            location = mi.str("location"),
+        )
+    }
+
+    /** 个人微博列表(C7292xB:107603{uid}__-_WEIBO_SECOND_PROFILE_WEIBO,已实测) */
+    suspend fun userTimeline(uid: String, page: Int = 1): List<WeiboMblog> {
+        val q = commonParams(authed = true)
+        q["containerid"] = "107603${uid}__-_WEIBO_SECOND_PROFILE_WEIBO"
+        q["page"] = page.toString()
+        q["count"] = "10"
+        applyCum("/2/cardlist", q)
+        val raw = execText(baseRequestBuilder().url(buildUrl("cardlist", q)).get().build())
+        val obj = WeiboJson.parse(raw)
+        val errno = obj?.int("errno")
+        if (errno != null && errno != 0) throw ApiError(errno, obj?.str("errmsg") ?: "userTimeline 失败")
+        return CardlistParser.parse(raw)
+    }
+
+    // ---------- 通知(2026-10-20 实测:@我的 + 未读数) ----------
+    /** @我的微博(statuses/mentions) */
+    suspend fun mentions(page: Int = 1): List<WeiboMblog> {
+        val q = commonParams(authed = true)
+        q["count"] = "20"; q["page"] = page.toString()
+        applyCum("/2/statuses/mentions", q)
+        val raw = execText(baseRequestBuilder().url(buildUrl("statuses/mentions", q)).get().build())
+        val obj = WeiboJson.parse(raw)
+        val errno = obj?.int("errno")
+        if (errno != null && errno != 0) throw ApiError(errno, obj?.str("errmsg") ?: "mentions 失败")
+        return TimelineParser.parse(raw)
+    }
+
+    /** 未读数(remind/unread_count):cmt/dm/mention_status/attitude… */
+    suspend fun unreadCount(): Map<String, Int> {
+        val q = commonParams(authed = true)
+        q["type"] = "cmt,mention,like,dm"
+        applyCum("/2/remind/unread_count", q)
+        val raw = execText(baseRequestBuilder().url(buildUrl("remind/unread_count", q)).get().build())
+        val obj = WeiboJson.parse(raw) ?: return emptyMap()
+        return listOf("cmt", "dm", "mention_status", "mention_cmt", "attitude", "follower")
+            .mapNotNull { k -> obj.int(k)?.let { k to it } }.toMap()
+    }
+
+    // ---------- 搜索(2026-10-20 实测:100303type=1&q=..&t=0 返回真实结果) ----------
+    suspend fun search(keyword: String, page: Int = 1): List<WeiboMblog> {
+        val q = commonParams(authed = true)
+        q["containerid"] = "100303type=1&q=$keyword&t=0"
+        q["page"] = page.toString()
+        q["count"] = "10"
+        applyCum("/2/cardlist", q)
+        val raw = execText(baseRequestBuilder().url(buildUrl("cardlist", q)).get().build())
+        val obj = WeiboJson.parse(raw)
+        val errno = obj?.int("errno")
+        if (errno != null && errno != 0) throw ApiError(errno, obj?.str("errmsg") ?: "搜索失败")
+        return CardlistParser.parse(raw)
+    }
+
+    // ---------- 互动:点赞/评论/转发(2026-10-20 全部实测,规格见 PROTOCOL.md §10) ----------
+
+    /** query 构造 + cum 的 POST 通用流(与实测脚本 test_like/test_comment 一致) */
+    private suspend fun signedPost(endpoint: String, extra: Map<String, String>): String =
+        with(java.util.LinkedHashMap<String, String>()) {
+            putAll(commonParams(authed = true))
+            putAll(extra)
+            applyCum("/2/$endpoint", this)
+            val url = (API_BASE + endpoint).toHttpUrl().newBuilder().apply {
+                this@with.forEach { (k, v) -> addQueryParameter(k, v) }
+            }.build().toString()
+            val req = baseRequestBuilder().url(url).post("".toRequestBody(null)).build()
+            withContext(Dispatchers.IO) {
+                http.newCall(req).execute().use { it.body?.string() ?: "" }
+            }
+        }
+
+    /** 点赞 */
+    suspend fun like(mid: String): Boolean =
+        WeiboJson.parse(signedPost("like/set_like", mapOf("id" to mid)))?.int("errno") == null
+
+    suspend fun cancelLike(mid: String): Boolean =
+        WeiboJson.parse(signedPost("like/cancel_like", mapOf("id" to mid)))
+            ?.str("result") == "true"
+
+    /** 评论 */
+    suspend fun comment(mid: String, text: String): ApiResult {
+        val raw = signedPost("comments/create",
+            mapOf("id" to mid, "comment" to text, "uicode" to "10000445", "moduleID" to "704"))
+        val obj = WeiboJson.parse(raw)
+        return ApiResult(httpCode = 200, errno = obj?.int("errno"), errmsg = obj?.str("errmsg"),
+            raw = raw)
+    }
+
+    /** 转发(返回新博文 mid,空串=失败) */
+    suspend fun repost(mid: String, text: String): String {
+        val raw = signedPost("statuses/repost",
+            mapOf("id" to mid, "status" to text, "isComment" to "0"))
+        val obj = WeiboJson.parse(raw) ?: return ""
+        return obj.str("mid") ?: obj.str("idstr") ?: ""
+    }
+
+    // ---------- 发博(statuses/send multipart,2026-10 端到端实测) ----------
     suspend fun statusesSend(content: String, visible: Int = 0): ApiResult = withContext(Dispatchers.IO) {
         ensureAid()
-        val form = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-        commonParams(authed = true).forEach { (k, v) -> form.addFormDataPart(k, v) }
+        // query:公共参数 + cum(实测必须);body:multipart 同样携带公共参数 + content/visible
+        val q = commonParams(authed = true)
+        applyCum("/2/statuses/send", q)
+        val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+        q.forEach { (k, v) -> form.addFormDataPart(k, v) }
         form.addFormDataPart("content", content)
         form.addFormDataPart("visible", visible.toString())
         val resp = http.newCall(
-            baseRequestBuilder().url(API_BASE + "statuses/send").post(form.build()).build()
+            baseRequestBuilder().url(buildUrl("statuses/send", q)).post(form.build()).build()
         ).execute()
         parseResult(resp.code, resp.body!!.string())
     }

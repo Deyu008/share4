@@ -13,12 +13,14 @@ class CommonParamsTest {
             "v_p","com_ver","wb_version","skin","v_f"), keys)
     }
 
-    @Test fun `gsid presence adds s`() {
+    @Test fun `authed params carry gsid and feedback s`() {
         val c = WeiboClient(DeviceProfile())
         assertNull(c.commonParams()["gsid"])
-        c.commonParams("_2A_x").let {
+        c.restoreSession(LoginSession(gsid = "_2A_x", uid = "123"))
+        c.commonParams(authed = true).let {
             assertEquals("_2A_x", it["gsid"])
-            assertEquals("_2A_x", it["s"])
+            // s = newCalculateS(uid):sha512 反馈索引(2026-10 破解)
+            assertEquals(WeiboCrypto.sApi("123"), it["s"])
         }
     }
 }

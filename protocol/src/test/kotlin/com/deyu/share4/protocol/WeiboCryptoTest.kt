@@ -44,4 +44,23 @@ class WeiboCryptoTest {
         assertEquals("Xiaomi-MI 9__weibo__11.6.0__android__android13", d.ua)
         assertEquals("Xiaomi-MI 9", d.deviceName)
     }
+
+    // ============ 2026-10 破解黄金值(Unicorn 指令级模拟 .so + 真实服务端双重验证) ============
+
+    /** .so 内部 wb_mapi_getparam 原生输出(零 IV SHA-256),24/24 路径一致之一 */
+    @Test fun cum_short() =
+        assertEquals("31570862", WeiboCrypto.cum("/2/cardlist?lang=zh_CN&gsid=abc&s=123"))
+
+    /** 模拟器上补丁 so 真机 JNI 输出(DEDDB3CE 那条路径的短版本同源验证) */
+    @Test fun cum_nullOnAlreadySigned() {
+        assertEquals(null, WeiboCrypto.cum("/2/cardlist?lang=zh_CN&gsid=abc&cum=deadbeef"))
+    }
+
+    /** s 真值:uid=5655585082 → 9cd20de6,服务端实测该 s 通过身份校验(-105→-200) */
+    @Test fun sApi_serverVerified() =
+        assertEquals("9cd20de6", WeiboCrypto.sApi("5655585082"))
+
+    /** 反馈索引 vs 旧实现差异锚点(weico PIN 下原生执行 trace=df9eea46) */
+    @Test fun sApi_feedbackRule() =
+        assertEquals("df9eea46", WeiboCrypto.sApi("5655585082", pin = WeiboCrypto.PIN))
 }
