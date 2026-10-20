@@ -1,5 +1,7 @@
 package com.deyu.share.ui.screens
 
+import com.deyu.share.ui.MediaNav
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring

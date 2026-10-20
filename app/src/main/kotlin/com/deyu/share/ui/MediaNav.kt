@@ -1,4 +1,4 @@
-package com.deyu.share.ui.screens
+package com.deyu.share.ui
 
 import com.deyu.share4.protocol.VideoQuality
 

@@ -13,7 +13,9 @@ import androidx.navigation.compose.rememberNavController
 import com.deyu.share.data.AppState
 import com.deyu.share.ui.screens.ComposerScreen
 import com.deyu.share.ui.screens.LoginScreen
+import com.deyu.share.ui.screens.ProfileScreen
 import com.deyu.share.ui.screens.ProtocolScreen
+import com.deyu.share.ui.screens.StatusDetailScreen
 import com.deyu.share.ui.screens.TimelineScreen
 import com.deyu.share.ui.screens.VerifyScreen
 import com.deyu.share.ui.screens.VideoScreen
@@ -27,6 +29,11 @@ object Routes {
     const val VIEWER = "viewer"
     const val VIDEO = "video"
     const val VERIFY = "verify"
+    const val PROFILE = "profile/{uid}"
+    const val DETAIL = "detail/{mid}"
+
+    fun profile(uid: String) = "profile/$uid"
+    fun detail(mid: String) = "detail/$mid"
 }
 
 @Composable
@@ -58,5 +65,11 @@ fun AppNav() {
         composable(Routes.VIDEO, enterTransition = { fadeIn(tween(220)) },
             popExitTransition = { fadeOut(tween(220)) }) { VideoScreen(nav) }
         composable(Routes.VERIFY) { VerifyScreen(nav) }
+        composable(Routes.PROFILE) { entry ->
+            ProfileScreen(entry.arguments?.getString("uid").orEmpty(), nav)
+        }
+        composable(Routes.DETAIL) { entry ->
+            StatusDetailScreen(entry.arguments?.getString("mid").orEmpty(), nav)
+        }
     }
 }
