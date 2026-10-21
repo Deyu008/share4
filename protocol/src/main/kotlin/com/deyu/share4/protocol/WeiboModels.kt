@@ -126,6 +126,15 @@ object HotSearchParser {
     }
 }
 
+/** 微博分组(groups 的 lists[],含系统组) */
+@Serializable
+data class WeiboGroup(
+    val id: String,
+    val name: String,
+    val memberCount: Int = 0,
+    val system: Boolean = false,
+)
+
 /** 私信会话(direct_messages/user_list 的 user_list[]) */
 @Serializable
 data class WeiboConversation(

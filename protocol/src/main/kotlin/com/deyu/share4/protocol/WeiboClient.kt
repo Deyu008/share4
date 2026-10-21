@@ -428,6 +428,44 @@ class WeiboClient(
             TimelineParser.parse(raw)
         }
 
+    /** 微博分组列表(groups:lists[],含“特别关注”等系统组) */
+    suspend fun groups(): List<WeiboGroup> = withContext(Dispatchers.IO) {
+        ensureAid()
+        val q = commonParams(authed = true)
+        q["count"] = "50"
+        applyCum("/2/groups", q)
+        val raw = execText(baseRequestBuilder().url(buildUrl("groups", q)).get().build())
+        val obj = WeiboJson.parse(raw) ?: return@withContext emptyList()
+        obj["lists"]?.jsonArray?.mapNotNull { el ->
+            val o = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+            WeiboGroup(
+                id = o.str("idstr") ?: o.str("id") ?: return@mapNotNull null,
+                name = o.str("name") ?: "",
+                memberCount = o.int("member_count") ?: 0,
+                system = o.str("mode") == "system",
+            )
+        } ?: emptyList()
+    }
+
+    /** 分组时间线(groups/timeline:与 friends_timeline 同构,list_id=分组 id) */
+    suspend fun groupTimeline(listId: String, page: Int = 1, count: Int = 25): List<WeiboMblog> =
+        withContext(Dispatchers.IO) {
+            ensureAid()
+            val q = commonParams(authed = true)
+            q["list_id"] = listId
+            q["count"] = count.toString()
+            q["page"] = page.toString()
+            applyCum("/2/groups/timeline", q)
+            val raw = execText(baseRequestBuilder()
+                .url(buildUrl("groups/timeline", q)).get().build())
+            val obj = WeiboJson.parse(raw)
+            val errno = obj?.int("errno")
+            if (errno != null && errno != 0) {
+                throw ApiError(errno, obj?.str("errmsg") ?: "groupTimeline 失败")
+            }
+            TimelineParser.parse(raw)
+        }
+
     // ---------- 图片发博·开放平台两步流(2026-10 端点确认:cn 端内联已关闭) ----------
     // ① POST upload.api.weibo.com/2/mss/upload.json  multipart(pic) + access_token → pic_id
     // ② POST api.weibo.com/2/statuses/upload.json     access_token + status + pic_id

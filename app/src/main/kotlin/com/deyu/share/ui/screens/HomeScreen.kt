@@ -178,12 +178,15 @@ fun HomeScreen(nav: NavController) {
     }
 }
 
-/** 微博 tab:关注流 + 热门流双列切换 + 无限滚动 */
+/** 微博 tab:全部(关注)/ 热门 / 分组 三类流,顶部分组条横向滚动 */
 @Composable
 private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.components.CardNav,
                          tapRefreshSignal: Int) {
     val scope = rememberCoroutineScope()
-    var feed by remember { mutableIntStateOf(0) }   // 0=全部(关注) 1=热门
+    var groups by remember { mutableStateOf<List<com.deyu.share4.protocol.WeiboGroup>>(emptyList()) }
+    // feedKind: 0=全部(关注) 1=热门 2=分组;groupId 在 kind==2 时生效
+    var feedKind by remember { mutableIntStateOf(0) }
+    var groupId by remember { mutableStateOf("") }
     var items by remember { mutableStateOf<List<WeiboMblog>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var banner by remember { mutableStateOf<String?>(null) }
@@ -191,6 +194,10 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
     var endReached by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val logged = AppState.session != null
+
+    LaunchedEffect(Unit) {
+        groups = runCatching { AppState.client.groups() }.getOrDefault(emptyList())
+    }
 
     fun load(reset: Boolean = true) {
         scope.launch {
@@ -201,18 +208,23 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
                 banner = "未登录 · 演示数据"
             } else {
                 try {
-                    val list = if (feed == 0)
-                        AppState.client.friendsTimeline(page = pageNo)
-                    else
-                        AppState.client.timeline(com.deyu.share4.protocol.WeiboClient.CID_HOT,
+                    val list = when (feedKind) {
+                        0 -> AppState.client.friendsTimeline(page = pageNo)
+                        1 -> AppState.client.timeline(com.deyu.share4.protocol.WeiboClient.CID_HOT,
                             page = pageNo)
-                    android.util.Log.d("Share4Tl", "feed=$feed page $pageNo ok: ${list.size}")
+                        else -> AppState.client.groupTimeline(groupId, page = pageNo)
+                    }
+                    android.util.Log.d("Share4Tl", "feed=$feedKind/$groupId page $pageNo ok: ${list.size}")
                     items = if (reset) list else {
                         val seen = items.map { it.mid }.toSet()
                         items + list.filter { it.mid !in seen }
                     }
                     if (list.isEmpty()) endReached = true
-                    if (reset && list.isEmpty()) banner = if (feed == 0) "还没有关注的人发微博" else "时间线为空"
+                    if (reset && list.isEmpty()) banner = when (feedKind) {
+                        0 -> "还没有关注的人发微博"
+                        1 -> "时间线为空"
+                        else -> "分组暂无微博"
+                    }
                 } catch (e: Exception) {
                     android.util.Log.d("Share4Tl", "feed FAIL: ${e.message}")
                     banner = "加载失败:${e.message?.take(40)}"
@@ -221,7 +233,7 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
             loading = false
         }
     }
-    LaunchedEffect(feed, logged, tapRefreshSignal) { load(true) }
+    LaunchedEffect(feedKind, groupId, logged, tapRefreshSignal) { load(true) }
 
     val shouldLoadMore by derivedStateOf {
         val info = listState.layoutInfo
@@ -230,18 +242,25 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
             info.totalItemsCount > 5 && last >= info.totalItemsCount - 3
     }
     LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore && logged && feed == 0) {
+        if (shouldLoadMore && logged && feedKind <= 1) {
             pageNo += 1
             load(false)
         }
     }
 
     Column(Modifier.fillMaxSize()) {
-        // 顶部分组条:全部 / 热门(原版为「全部+自定义分组」,分组管理后续接入)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)) {
-            FeedTabLabel("全部", feed == 0) { feed = 0 }
-            FeedTabLabel("热门", feed == 1) { feed = 1 }
-            Spacer(Modifier.weight(1f))
+        // 顶部分组条:全部 / 热门 / 用户分组(横向滚动,原版为「全部+自定义分组」)
+        androidx.compose.foundation.lazy.LazyRow(
+            Modifier.fillMaxWidth(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+        ) {
+            item(key = "all") { FeedTabLabel("全部", feedKind == 0) { feedKind = 0 } }
+            item(key = "hot") { FeedTabLabel("热门", feedKind == 1) { feedKind = 1 } }
+            items(groups, key = { it.id }) { g ->
+                FeedTabLabel(g.name, feedKind == 2 && groupId == g.id) {
+                    feedKind = 2; groupId = g.id
+                }
+            }
         }
         if (items.isEmpty() && loading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
