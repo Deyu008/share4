@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FloatingActionButton
@@ -338,31 +341,98 @@ private fun HotSearchPane(nav: NavController) {
     HotSearchBoard(hotWords) { word -> nav.navigate(Routes.search(word)) }
 }
 
-/** 抽屉(仿原版侧栏):账号头 + 入口清单 */
+/** 抽屉(仿原版侧栏):账号头(点击切换/添加账号)+ 入口清单 */
 @Composable
 private fun ShareDrawerSheet(nav: NavController) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val session = AppState.session
+    var accounts by remember { mutableStateOf(AppState.accounts(ctx)) }
+    var showSwitcher by remember { mutableStateOf(false) }
+
+    // 当前会话与列表不一致(登录页 add 过)时刷新
+    LaunchedEffect(session?.uid) {
+        accounts = AppState.accounts(ctx)
+    }
+
+    if (showSwitcher) {
+        AlertDialog(
+            onDismissRequest = { showSwitcher = false },
+            title = { Text("切换账号") },
+            text = {
+                Column {
+                    accounts.forEach { acc ->
+                        Row(Modifier.fillMaxWidth()
+                            .clickable {
+                                AppState.switchAccount(acc.uid, ctx)
+                                showSwitcher = false
+                            }
+                            .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(acc.avatarHd, acc.screenName ?: "微", size = 36.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(acc.screenName ?: "微博用户",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (acc.uid == session?.uid) FontWeight.Bold
+                                                 else FontWeight.Normal)
+                            }
+                            if (acc.uid == session?.uid) {
+                                Icon(Icons.Filled.CheckCircle, "当前",
+                                    tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                    if (accounts.size < com.deyu.share.data.AccountStore.MAX_ACCOUNTS) {
+                        Row(Modifier.fillMaxWidth()
+                            .clickable {
+                                showSwitcher = false
+                                nav.navigate(Routes.LOGIN)
+                            }
+                            .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Add, null,
+                                tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text("添加账号", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSwitcher = false }) { Text("关闭") }
+            },
+        )
+    }
+
     ModalDrawerSheet {
         Column(Modifier.fillMaxWidth()) {
-            // 账号头(未登录显示登录入口)
-            Row(Modifier.fillMaxWidth().padding(20.dp),
+            // 账号头(点击弹出账号切换;未登录显示登录入口)
+            Row(Modifier.fillMaxWidth().clickable {
+                if (session != null) showSwitcher = true
+                else nav.navigate(Routes.LOGIN)
+            }.padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Avatar(session?.avatarHd, session?.screenName ?: "客",
-                    size = 52.dp,
-                    onClick = {
-                        session?.uid?.let {
-                            nav.navigate(Routes.profile(it))
-                        } ?: nav.navigate(Routes.LOGIN)
-                    })
+                    size = 52.dp)
                 Spacer(Modifier.width(12.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(session?.screenName ?: "未登录",
                         style = MaterialTheme.typography.titleMedium)
                     session?.let {
                         Text("uid ${it.uid}", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    if (accounts.size > 1) {
+                        Text("共 ${accounts.size} 个账号,点击切换",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                if (session != null) {
+                    Icon(Icons.AutoMirrored.Filled.MenuBook, "切换",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -387,7 +457,7 @@ private fun ShareDrawerSheet(nav: NavController) {
             if (session != null) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 DrawerItem(Icons.Outlined.Logout, "退出登录") {
-                    AppState.logout(ctx)
+                    AppState.logout(session.uid, ctx)
                     nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
                 }
             }
