@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -76,7 +77,8 @@ fun SearchPage(nav: NavController, initialQuery: String = "") {
         if (initialQuery.isNotBlank()) doSearch(initialQuery)
     }
 
-    Column(Modifier.fillMaxSize()) {
+    // 独立路由页:搜索框行即顶栏,须避开系统状态栏(edge-to-edge)
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
