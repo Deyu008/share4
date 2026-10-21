@@ -126,6 +126,67 @@ object HotSearchParser {
     }
 }
 
+/** 私信会话(direct_messages/user_list 的 user_list[]) */
+@Serializable
+data class WeiboConversation(
+    val uid: String,
+    val name: String,
+    val avatar: String? = null,
+    val unread: Int = 0,
+    val lastText: String = "",
+    val lastAt: String = "",
+)
+
+/** 私信消息(conversation / create 返回体) */
+@Serializable
+data class WeiboDirectMessage(
+    val id: String,
+    val text: String,
+    val createdAt: String,
+    val senderId: String,
+    val senderName: String,
+    val senderAvatar: String? = null,
+)
+
+object DmParser {
+    fun parseUsers(raw: String): List<WeiboConversation> {
+        val root = WeiboJson.parse(raw) ?: return emptyList()
+        val arr = root["user_list"]?.jsonArray ?: return emptyList()
+        return arr.mapNotNull { el ->
+            val o = el.jsonObject
+            val u = o["user"]?.jsonObject ?: return@mapNotNull null
+            val last = o["direct_message"]?.jsonObject
+            WeiboConversation(
+                uid = u.str("idstr") ?: u.str("id") ?: "",
+                name = u.str("name") ?: u.str("screen_name") ?: "",
+                avatar = u.str("profile_image_url"),
+                unread = o.int("unread_count") ?: 0,
+                lastText = last?.str("text") ?: "",
+                lastAt = last?.str("created_at") ?: "",
+            )
+        }
+    }
+
+    /** conversation 返回最新在前,解析后按调用方需要自行排序 */
+    fun parseMessages(raw: String): List<WeiboDirectMessage> {
+        val root = WeiboJson.parse(raw) ?: return emptyList()
+        val arr = root["direct_messages"]?.jsonArray ?: return emptyList()
+        return arr.mapNotNull { el -> parseMessage(el.jsonObject) }
+    }
+
+    fun parseMessage(o: JsonObject): WeiboDirectMessage? {
+        val id = o.str("idstr") ?: o.str("id") ?: return null
+        return WeiboDirectMessage(
+            id = id,
+            text = o.str("text") ?: "",
+            createdAt = o.str("created_at") ?: "",
+            senderId = o.str("sender_id") ?: "",
+            senderName = o.str("sender_screen_name") ?: "",
+            senderAvatar = (o["sender"] as? JsonObject)?.str("profile_image_url"),
+        )
+    }
+}
+
 object CommentParser {
     fun parse(raw: String): List<WeiboComment> {
         val root = WeiboJson.parse(raw) ?: return emptyList()
@@ -170,6 +231,7 @@ data class WeiboMblog(
     val retweetedAvatar: String? = null,
     val retweetedPics: List<String> = emptyList(),
     val isLongText: Boolean = false,
+    val favorited: Boolean = false,
 ) {
     val plainText: String get() = text
         .replace(Regex("<br\\s*/?>"), "\n")
@@ -262,6 +324,7 @@ object CardlistParser {
             retweetedAvatar = rt?.get("user")?.jsonObject?.str("profile_image_url"),
             retweetedPics = pics(rt),
             isLongText = m.str("isLongText")?.toBooleanStrictOrNull() ?: false,
+            favorited = m.str("favorited")?.toBooleanStrictOrNull() ?: false,
         )
     }
 }

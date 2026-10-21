@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
@@ -355,8 +356,11 @@ private fun ShareDrawerSheet(nav: NavController) {
             DrawerItem(Icons.Filled.Settings, "设置") {
                 nav.navigate(Routes.SETTINGS)
             }
-            DrawerItem(Icons.AutoMirrored.Filled.MenuBook, "草稿与收藏") {
-                nav.navigate(Routes.PROTOCOL)   // TODO: 替换为草稿/收藏页
+            DrawerItem(Icons.Filled.Star, "我的收藏") {
+                nav.navigate(Routes.FAVORITES)
+            }
+            DrawerItem(Icons.Filled.Edit, "草稿箱") {
+                nav.navigate(Routes.DRAFTS)
             }
             DrawerItem(Icons.Outlined.Info, "关于") {
                 nav.navigate(Routes.ABOUT)

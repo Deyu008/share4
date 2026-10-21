@@ -19,20 +19,33 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.deyu.share.data.AppState
+import com.deyu.share.data.DraftStore
 import kotlinx.coroutines.launch
 
-/** X 式发博:全屏编辑、顶部极简 chrome、右下角计数、发布成功后关闭;支持配图(开放平台两步流) */
+/** 发博编辑器:全屏编辑、配图(开放平台两步流)、关闭时可选存草稿、可从草稿恢复 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ComposerScreen(nav: NavController) {
+fun ComposerScreen(nav: NavController, draftId: Long = 0L) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var text by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var picked by remember { mutableStateOf<ByteArray?>(null) }
+    var askDraft by remember { mutableStateOf(false) }
+    var draftLoaded by remember { mutableStateOf(false) }
     val logged = AppState.session != null
     val limit = 2000
+
+    // 从草稿恢复(draftId 非空时载入一次;发送或放弃后草稿删除)
+    LaunchedEffect(draftId) {
+        if (draftId != 0L && !draftLoaded) {
+            DraftStore.list(ctx).firstOrNull { it.id == draftId }?.let { d ->
+                text = d.text
+            }
+            draftLoaded = true
+        }
+    }
 
     // 图片选择器
     val pickPic = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -47,10 +60,15 @@ fun ComposerScreen(nav: NavController) {
 
     fun close() { nav.popBackStack() }
 
+    // 内容非空时关闭 → 先问是否存草稿
+    fun requestClose() {
+        if (text.isNotBlank() || picked != null) askDraft = true else close()
+    }
+
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).padding(4.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { close() }) {
+                IconButton(onClick = { requestClose() }) {
                     Icon(Icons.Filled.Close, "关闭",
                         tint = MaterialTheme.colorScheme.onBackground)
                 }
@@ -75,7 +93,10 @@ fun ComposerScreen(nav: NavController) {
                                 AppState.client.statusesSend(text.trim())
                             }
                             busy = false
-                            if (r.errno == null || r.errno == 0) close()
+                            if (r.errno == null || r.errno == 0) {
+                                if (draftId != 0L) DraftStore.remove(ctx, draftId)
+                                close()
+                            }
                             else error = "${r.errmsg ?: "发送失败"}(${r.errno})"
                         }
                     },
@@ -138,6 +159,24 @@ fun ComposerScreen(nav: NavController) {
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)
                 .navigationBarsPadding(),
+        )
+    }
+
+    // 存草稿确认弹窗
+    if (askDraft) {
+        AlertDialog(
+            onDismissRequest = { askDraft = false },
+            title = { Text("存入草稿箱?") },
+            text = { Text("当前内容尚未发布") },
+            confirmButton = {
+                TextButton(onClick = {
+                    DraftStore.save(ctx, text)
+                    close()
+                }) { Text("存草稿") }
+            },
+            dismissButton = {
+                TextButton(onClick = { close() }) { Text("不保存") }
+            },
         )
     }
 }

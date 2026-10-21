@@ -2,6 +2,7 @@ package com.deyu.share4.protocol
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -625,6 +626,69 @@ class WeiboClient(
             .get().build()
         val text = http.newCall(req).execute().use { it.body?.string() ?: "" }
         HotSearchParser.parse(text)
+    }
+
+    // ---------- 收藏 / 私信(2026-10-22 复刻推进,规格见 PROTOCOL.md §12) ----------
+
+    /** signedPost 的“errno 为 0/缺失即成功”包装 */
+    private suspend fun postOk(endpoint: String, extra: Map<String, String>): Boolean {
+        val raw = signedPost(endpoint, extra)
+        val obj = WeiboJson.parse(raw) ?: return false
+        return (obj.int("errno") ?: 0) == 0
+    }
+
+    /** 收藏列表(favorites:元素 {status, favorited_time},status 与时间线卡片同构) */
+    suspend fun favorites(page: Int = 1): List<WeiboMblog> = withContext(Dispatchers.IO) {
+        ensureAid()
+        val q = commonParams(authed = true)
+        q["page"] = page.toString(); q["count"] = "20"
+        applyCum("/2/favorites", q)
+        val raw = execText(baseRequestBuilder().url(buildUrl("favorites", q)).get().build())
+        val obj = WeiboJson.parse(raw) ?: return@withContext emptyList()
+        val errno = obj.int("errno")
+        if (errno != null && errno != 0) throw ApiError(errno, obj.str("errmsg") ?: "favorites 失败")
+        obj["favorites"]?.jsonArray?.mapNotNull { el ->
+            (el as? kotlinx.serialization.json.JsonObject)
+                ?.get("status")?.jsonObject?.let { CardlistParser.parseMblog(it) }
+        } ?: emptyList()
+    }
+
+    suspend fun favoriteCreate(mid: String): Boolean =
+        postOk("favorites/create", mapOf("id" to mid))
+
+    suspend fun favoriteDestroy(mid: String): Boolean =
+        postOk("favorites/destroy", mapOf("id" to mid))
+
+    /** 私信会话列表(direct_messages/user_list) */
+    suspend fun dmUsers(): List<WeiboConversation> = withContext(Dispatchers.IO) {
+        ensureAid()
+        val q = commonParams(authed = true)
+        q["count"] = "20"; q["page"] = "1"
+        applyCum("/2/direct_messages/user_list", q)
+        val raw = execText(baseRequestBuilder()
+            .url(buildUrl("direct_messages/user_list", q)).get().build())
+        DmParser.parseUsers(raw)
+    }
+
+    /** 私信消息(最新在前;聊天展示请 reversed) */
+    suspend fun dmConversation(uid: String, count: Int = 20): List<WeiboDirectMessage> =
+        withContext(Dispatchers.IO) {
+            ensureAid()
+            val q = commonParams(authed = true)
+            q["uid"] = uid; q["count"] = count.toString()
+            applyCum("/2/direct_messages/conversation", q)
+            val raw = execText(baseRequestBuilder()
+                .url(buildUrl("direct_messages/conversation", q)).get().build())
+            DmParser.parseMessages(raw)
+        }
+
+    /** 发私信(direct_messages/create,返回发出的消息;失败返回 null) */
+    suspend fun dmSend(uid: String, text: String): WeiboDirectMessage? {
+        val raw = signedPost("direct_messages/create",
+            mapOf("text" to text, "uid" to uid))
+        val obj = WeiboJson.parse(raw) ?: return null
+        if ((obj.int("errno") ?: 0) != 0) return null
+        return obj.let { DmParser.parseMessage(it) }
     }
 
     // ---------- 通知(2026-10-20 实测:@我的 + 未读数) ----------

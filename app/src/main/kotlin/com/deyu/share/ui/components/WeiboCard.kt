@@ -19,11 +19,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -172,7 +173,7 @@ fun WeiboCard(m: WeiboMblog, cardNav: CardNav, modifier: Modifier = Modifier) {
                 }
                 LikeAction(m, Modifier.weight(1f))
                 CardAction(Icons.Outlined.BarChart, 0, Modifier.weight(1f))
-                CardAction(Icons.Outlined.BookmarkBorder, 0, Modifier.weight(1f), hideZero = true)
+                FavoriteAction(m, Modifier.weight(1f))
             }
             dialog?.let { mode ->
                 InteractionDialog(
@@ -216,6 +217,30 @@ private fun LikeAction(m: WeiboMblog, modifier: Modifier = Modifier) {
             tint = if (liked) Color(0xFFE2413E)
             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f))
         Text(formatCount(count), style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** 收藏按钮:初始态取 mblog.favorited,本地翻转 + favorites/create|destroy(2026-10-22 实测) */
+@Composable
+private fun FavoriteAction(m: WeiboMblog, modifier: Modifier = Modifier) {
+    val scope = rememberCoroutineScope()
+    var fav by remember { mutableStateOf(m.favorited) }
+    Row(modifier.clickable {
+        fav = !fav
+        scope.launch {
+            val ok = if (fav) AppState.client.favoriteCreate(m.mid)
+            else AppState.client.favoriteDestroy(m.mid)
+            if (!ok) fav = !fav
+        }
+    }, verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Icon(
+            if (fav) Icons.Filled.Star else Icons.Outlined.StarBorder, null,
+            Modifier.size(16.dp),
+            tint = if (fav) Color(0xFFE8A70B)
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f))
+        Text(if (fav) "已收藏" else "收藏", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
