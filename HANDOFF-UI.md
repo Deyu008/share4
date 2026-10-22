@@ -59,10 +59,32 @@ UI 全面优化已**改完并逐页真机截图验收通过**（浅色/深色均
 | 高级版 | 徽章头改蓝底白图标，功能项改圆角卡列表 |
 | 发博页 | 补顶栏（关闭/标题/发布）；字数统计从悬浮层挪进底栏（原来会盖住内容）；补**图片缩略图预览**；配图按钮换图标 |
 
-### 2.5 其他
-- 切换流/刷新时 `scrollToItem(0)` 回顶部。
-- 列表底部统一留 88dp，避免被 FAB 和底栏遮挡。
-- `AppNav.kt` 统一 `Titled()` 顶栏字号。
+### 2.5 启动图标重做（2026-10-22 第三轮）
+
+**旧图标**：纯色 `#1565C0` 底 + 四节点网络图（3px 细连线，小尺寸下发虚），
+既不表达「微博客户端」，也跟新的高级材质主题不搭。
+
+**新图标**：白色眼形轮廓（杏仁形外框 + 虹膜环）+ 橙色瞳孔 `#E8821E`，
+微博蓝渐变底 + 左上柔光 + 右下暖光，与 App 主题的弥散光背景同一套语言。
+
+**产物**：
+- `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_fg.png` — 前景（带透明通道的主体）
+- `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_bg.png` — 背景（蓝渐变 + 柔光）
+- `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_mono.png` — 单色层（Android 13+ 主题图标）
+- `mipmap-{...}dpi/ic_launcher.png` / `ic_launcher_round.png` — 旧版圆角 / 圆形图标
+- `mipmap-anydpi-v26/ic_launcher.xml` / `ic_launcher_round.xml` — adaptive-icon（bg + fg + mono）
+- `design/icon-512.png` — 商店上架用 512×512
+- 旧的 `drawable/ic_launcher_bg.xml` / `ic_launcher_fg.xml` 向量已删除
+- Manifest 增加 `android:roundIcon="@mipmap/ic_launcher_round"`
+
+**可复现**：`tools/icon/build_icon.ps1` + `tools/icon/IconTool.cs`（纯 System.Drawing，无第三方包），
+源图 `tools/icon/icon-source.jpg`。改完跑一次即可重新生成全部密度：
+```powershell
+cd E:\Code\Share\share4
+.\tools\icon\build_icon.ps1
+```
+抠像做法：源图是白主体 + 黑底，按亮度做 alpha 渐变（`lo=45 / hi=120`），
+主体按包围盒缩放到 60%（自适应图标安全区是 66/108）。
 
 ### 2.6 高级材质改造（HyperOS 4 风格，2026-10-22 第二轮）
 
@@ -105,6 +127,11 @@ UI 全面优化已**改完并逐页真机截图验收通过**（浅色/深色均
 - 列表分隔线 `FeedDivider` 全部删除（卡片浮起后不需要）
 - 根容器补 `LocalContentColor = onBackground`（自绘卡片/顶栏没有 Surface 提供 contentColor，
   默认黑色在深色模式下会看不见——昵称和"Share"标题曾因此几乎不可见，已修）
+
+### 2.7 其他
+- 切换流/刷新时 `scrollToItem(0)` 回顶部。
+- 列表底部统一留 88dp，避免被 FAB 和底栏遮挡。
+- `AppNav.kt` 统一 `Titled()` 顶栏字号。
 
 ---
 
