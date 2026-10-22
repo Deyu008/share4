@@ -61,31 +61,32 @@ UI 全面优化已**改完并逐页真机截图验收通过**（浅色/深色均
 
 ### 2.5 启动图标重做（2026-10-22 第三轮）
 
-**旧图标**：纯色 `#1565C0` 底 + 四节点网络图（3px 细连线，小尺寸下发虚），
-既不表达「微博客户端」，也跟新的高级材质主题不搭。
+**沿用原版 Share 的「切面 S」**（用户明确要求：保留原版那个 S 形意象，做现代化）。
+原版图标是等轴测立体切面 S：上段藏青立体块 + 中段青色三角 + 下段浅灰菱形，白圆底。
 
-**新图标**：保留原版的「四节点网络」意象，但把执行做精致——
-- **几何对称化**：原来上中枢纽 + 左/下/右三个散乱节点、连线交错；
-  改成上中枢纽 + 左/右/下三节点连成一个**对称菱形环**，负空间均衡
-- **节点做珠光**：径向渐变 + 左上高光，枢纽最大、三个卫星节点略小
-- **强调色**：右节点用主题橙 `#E8821E`，带一层柔光晕（焦点唯一）
-- **底板有纵深**：微博蓝对角渐变 `#3E86D6 → #22559F → #0D2A54`
-  + 左上柔光 + 右下暖光，与 App 的弥散光背景同一套语言
-- **连线**：4 单位圆头圆角描边，半透明白
+**新版**：
+- **保留**原版的切面结构与色序（藏青 → 青 → 冰蓝），换成**现代扁平渲染**（无 3D 渲染噪点）
+- **底板改中间调对角渐变** `#FFFFFF → #E6F0FA → #6FA6D2` + 右下淡青光。
+  这是**必须**的：S 的上段是深藏青（需要浅底才读得出），下段是极浅冰蓝（需要中蓝底才读得出），
+  所以底板不能纯白也不能太深，取中间调让两段切面同时成立
+- S 放在自适应图标安全区内（标记占 60%，安全区是 66/108）
 
-**产物**（矢量为唯一事实来源，`res/drawable/ic_launcher_*.xml`）：
-- `drawable/ic_launcher_bg.xml` — 底板（渐变 + 双柔光）
-- `drawable/ic_launcher_fg.xml` — 前景（连线 + 珠光节点 + 橙色光晕）
-- `drawable/ic_launcher_mono.xml` — 单色层（Android 13+ 主题图标）
+**产物**：
+- `drawable/ic_launcher_bg.xml` — 底板（**矢量**，唯一事实来源）
+- `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_fg.png` — 前景（S，带透明通道）
+- `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_mono.png` — 单色层（Android 13+ 主题图标，纯白剪影）
 - `mipmap-anydpi-v26/ic_launcher.xml` / `ic_launcher_round.xml` — adaptive-icon
-- `design/icon-512.png` — 商店上架用 512×512
-- Manifest 增加 `android:roundIcon="@mipmap/ic_launcher_round"`
-- minSdk 26，adaptive-icon 全覆盖，**不再需要各密度 PNG**（APK 比原来还小）
+- `design/icon-512.png` — 商店上架用 512×512（圆底，仿原版）
+- Manifest 有 `android:roundIcon="@mipmap/ic_launcher_round"`
 
-**重新生成商店图**：`tools/icon/render_store_icon.ps1` + `tools/icon/IconGraph.cs`
-（纯 System.Drawing，几何与矢量一一对应；只用了最基础的 GDI+ API，
-因为部分 PowerShell 沙箱里 `Add-Type` 暴露的是精简版 System.Drawing，
-`LinearGradientBrush` 的多档构造与 `ColorBlend` 都不可用，故背景改为逐像素计算）。
+**重新生成**：`tools/icon/build_icon.ps1` + `tools/icon/IconMark.cs`，
+源图 `tools/icon/s-mark-source.jpg`（生成式美术稿）。
+抠像用**最大通道**而非亮度：`lo=16 / hi=70`——S 的上段是深藏青，
+按亮度算会被整段抠没，按最大通道（B 通道高）才保得住。
+`tools/icon/` 里的渲染器只依赖最基础的 GDI+ API，因为部分 PowerShell 沙箱的
+`Add-Type` 暴露的是精简版 System.Drawing（`LinearGradientBrush` 多档构造、
+`ColorBlend`、`LinearGradientMode.Linear` 均不可用，`-CompilerOptions` 参数也不支持），
+底板因此改为逐像素计算。
 
 ### 2.6 高级材质改造（HyperOS 4 风格，2026-10-22 第二轮）
 
