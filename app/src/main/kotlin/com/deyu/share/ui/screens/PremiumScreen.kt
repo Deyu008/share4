@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -53,9 +55,11 @@ fun PremiumScreen(nav: NavController) {
     )
     Scaffold(
         topBar = { SettingsTopBar("Share 高级版", nav) },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState())) {
             // 徽章头
@@ -112,9 +116,12 @@ fun PremiumScreen(nav: NavController) {
 fun AboutScreen(nav: NavController) {
     Scaffold(
         topBar = { SettingsTopBar("关于", nav) },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(24.dp),
+        Column(Modifier.fillMaxSize().padding(padding)
+            .navigationBarsPadding()
+            .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(28.dp))
             Text("Share", style = MaterialTheme.typography.titleLarge)

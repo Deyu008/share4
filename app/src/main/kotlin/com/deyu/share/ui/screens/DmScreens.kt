@@ -55,8 +55,11 @@ import com.deyu.share.ui.components.EmptyState
 import com.deyu.share.ui.components.LoadingState
 import com.deyu.share.ui.components.formatRelativeTime
 import com.deyu.share.ui.components.stripHtml
+import com.deyu.share.ui.theme.GlassBottomBar
 import com.deyu.share4.protocol.WeiboConversation
 import com.deyu.share4.protocol.WeiboDirectMessage
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 /** 私信会话列表(仿 DirectMessageUsersActivity) */
@@ -172,6 +175,9 @@ fun DmChatScreen(uid: String, name: String, nav: NavController) {
         }
     }
 
+    // 消息流作为 haze 源,底部输入条是它的兄弟节点 → 玻璃能模糊滚过的消息
+    val contentHazeState = remember { HazeState() }
+
     Column(Modifier.fillMaxSize().imePadding()) {
         if (sendError != null) {
             Text(sendError ?: "", style = MaterialTheme.typography.labelSmall,
@@ -180,7 +186,7 @@ fun DmChatScreen(uid: String, name: String, nav: NavController) {
                     .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f))
                     .padding(horizontal = 16.dp, vertical = 6.dp))
         }
-        Box(Modifier.weight(1f)) {
+        Box(Modifier.weight(1f).hazeSource(contentHazeState)) {
             when {
                 loading -> LoadingState()
                 error != null && messages.isEmpty() ->
@@ -200,7 +206,7 @@ fun DmChatScreen(uid: String, name: String, nav: NavController) {
                 }
             }
         }
-        Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
+        GlassBottomBar(state = contentHazeState) {
             Row(Modifier.fillMaxWidth().navigationBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {

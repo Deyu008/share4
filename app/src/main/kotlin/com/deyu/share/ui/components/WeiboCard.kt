@@ -67,6 +67,7 @@ import coil.compose.AsyncImage
 import com.deyu.share.data.AppState
 import com.deyu.share.ui.MediaNav
 import com.deyu.share.ui.Routes
+import com.deyu.share.ui.theme.cardSurface
 import com.deyu.share4.protocol.VideoQuality
 import com.deyu.share4.protocol.WeiboMblog
 import kotlinx.coroutines.launch
@@ -118,7 +119,11 @@ fun WeiboCard(m: WeiboMblog, cardNav: CardNav, modifier: Modifier = Modifier) {
     val longText = bodyText.length > COLLAPSE_AT
     val truncatedByServer = m.isLongText && m.longText.isNullOrBlank() && fullText == null
 
-    Row(Modifier.fillMaxWidth().then(modifier).padding(horizontal = 14.dp, vertical = 11.dp)) {
+    Row(Modifier.fillMaxWidth().then(modifier)
+        .padding(horizontal = 12.dp, vertical = 5.dp)   // 卡片外边距
+        .cardSurface()                                   // 浮起卡片:圆角底 + 投影 + 高光描边
+        .padding(horizontal = 12.dp, vertical = 12.dp))  // 卡片内边距
+    {
         Avatar(m.avatar, m.userName, onClick = { cardNav.openProfile(m.userId) })
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
@@ -266,14 +271,6 @@ private fun ActionRow(m: WeiboMblog, onComment: () -> Unit, onRepost: () -> Unit
             }
         }
     }
-}
-
-/** 卡片之间的分隔线:左侧留出头像列宽,与原版列表一致 */
-@Composable
-fun FeedDivider(modifier: Modifier = Modifier) {
-    androidx.compose.material3.HorizontalDivider(
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
-        modifier = modifier.padding(start = 68.dp))
 }
 
 /** 点赞按钮:本地状态翻转 + like/cancel_like(2026-10-20 实测通过的端点) */

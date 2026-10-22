@@ -28,7 +28,6 @@ import androidx.navigation.NavController
 import com.deyu.share.data.AppState
 import com.deyu.share.ui.components.EmptyState
 import com.deyu.share.ui.components.ErrorState
-import com.deyu.share.ui.components.FeedDivider
 import com.deyu.share.ui.components.ListFooter
 import com.deyu.share.ui.components.LoadingState
 import com.deyu.share.ui.components.WeiboCard
@@ -99,7 +98,6 @@ fun FavoritesScreen(nav: NavController) {
                 contentPadding = PaddingValues(bottom = 16.dp)) {
                 items(items, key = { it.mid }) { m ->
                     WeiboCard(m, cardNav)
-                    FeedDivider()
                 }
                 item(key = "footer") {
                     ListFooter(if (endReached) "— 已经到底啦 —" else "上滑加载更多")

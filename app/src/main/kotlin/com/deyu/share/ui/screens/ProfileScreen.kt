@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -59,12 +61,12 @@ import com.deyu.share.ui.components.Avatar
 import com.deyu.share.ui.components.CardNav
 import com.deyu.share.ui.components.EmptyState
 import com.deyu.share.ui.components.ErrorState
-import com.deyu.share.ui.components.FeedDivider
 import com.deyu.share.ui.components.ListFooter
 import com.deyu.share.ui.components.LoadingState
 import com.deyu.share.ui.components.WeiboCard
 import com.deyu.share.ui.components.cardNavOf
 import com.deyu.share.ui.components.formatCount
+import com.deyu.share.ui.theme.GlassTopBar
 import com.deyu.share4.protocol.WeiboMblog
 import com.deyu.share4.protocol.WeiboUserProfile
 import kotlinx.coroutines.launch
@@ -144,7 +146,7 @@ fun ProfileScreen(uid: String, nav: NavController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            GlassTopBar(
                 title = {
                     Text((state as? ProfileUiState.Ready)?.profile?.screenName ?: "用户主页",
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -152,17 +154,16 @@ fun ProfileScreen(uid: String, nav: NavController) {
                 },
                 navigationIcon = {
                     IconButton(onClick = { nav.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回",
+                            tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground),
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding).navigationBarsPadding()) {
             when (val s = state) {
                 ProfileUiState.Loading -> LoadingState()
                 is ProfileUiState.Error -> ErrorState(s.message, { load() })
@@ -205,7 +206,6 @@ fun ProfileScreen(uid: String, nav: NavController) {
                     }
                     items(s.posts, key = { it.mid }) { m ->
                         WeiboCard(m, cardNav)
-                        FeedDivider()
                     }
                     item(key = "footer") {
                         ListFooter(if (s.endReached) "— 已经到底啦 —" else "上滑加载更多")

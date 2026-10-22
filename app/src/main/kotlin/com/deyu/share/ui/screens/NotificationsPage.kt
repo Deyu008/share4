@@ -48,7 +48,6 @@ import androidx.navigation.NavController
 import com.deyu.share.data.AppState
 import com.deyu.share.ui.Routes
 import com.deyu.share.ui.components.EmptyState
-import com.deyu.share.ui.components.FeedDivider
 import com.deyu.share.ui.components.LoadingState
 import com.deyu.share.ui.components.WeiboCard
 import com.deyu.share.ui.components.cardNavOf
@@ -128,7 +127,6 @@ fun NotificationsPage(nav: NavController) {
             else -> LazyColumn(contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(mentions, key = { it.mid }) { m ->
                     WeiboCard(m, cardNav)
-                    FeedDivider()
                 }
             }
         }

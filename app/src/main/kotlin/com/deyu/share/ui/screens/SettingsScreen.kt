@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -37,9 +39,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavController
 import com.deyu.share.data.SettingsStore
 import com.deyu.share.ui.Routes
+import com.deyu.share.ui.theme.GlassTopBar
 
 /**
  * 设置页,结构仿原版 SettingActivity(g.xml 聚合分类)。
@@ -51,9 +55,12 @@ import com.deyu.share.ui.Routes
 fun SettingsScreen(nav: NavController) {
     Scaffold(
         topBar = { SettingsTopBar("设置", nav) },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxSize().padding(padding)
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())) {
             SettingsSection("常规设置")
             SettingsCard {
                 SettingsEntry("基本设置", "夜间模式、首页显示与刷新") {
@@ -82,9 +89,12 @@ fun GeneralSettingsScreen(nav: NavController) {
 
     Scaffold(
         topBar = { SettingsTopBar("基本设置", nav) },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxSize().padding(padding)
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())) {
             SettingsSection("显示")
             SettingsCard {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -135,19 +145,17 @@ fun GeneralSettingsScreen(nav: NavController) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** 设置类页面的玻璃顶栏 */
 @Composable
 fun SettingsTopBar(title: String, nav: NavController) {
-    androidx.compose.material3.TopAppBar(
+    GlassTopBar(
         title = { Text(title, style = MaterialTheme.typography.titleMedium) },
         navigationIcon = {
             androidx.compose.material3.IconButton(onClick = { nav.popBackStack() }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回",
+                    tint = MaterialTheme.colorScheme.onBackground)
             }
         },
-        colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
-            titleContentColor = MaterialTheme.colorScheme.onBackground),
     )
 }
 

@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -46,14 +45,12 @@ import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -81,12 +78,17 @@ import com.deyu.share.data.SettingsStore
 import com.deyu.share.ui.Routes
 import com.deyu.share.ui.components.Avatar
 import com.deyu.share.ui.components.EmptyState
-import com.deyu.share.ui.components.FeedDivider
 import com.deyu.share.ui.components.ListFooter
 import com.deyu.share.ui.components.WeiboCard
 import com.deyu.share.ui.components.cardNavOf
+import com.deyu.share.ui.theme.MaterialFab
+import com.deyu.share.ui.theme.edgeLineColor
+import com.deyu.share.ui.theme.glassPanel
+import com.deyu.share.ui.theme.topEdgeLine
 import com.deyu.share4.protocol.WeiboGroup
 import com.deyu.share4.protocol.WeiboMblog
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 /**
@@ -115,58 +117,68 @@ fun HomeScreen(nav: NavController) {
         drawerState = drawer,
         drawerContent = { ShareDrawerSheet(nav) },
     ) {
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()) {
-            // ---------- 顶栏 ----------
-            Row(Modifier.fillMaxWidth().height(52.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { scope.launch { drawer.open() } }) {
-                    Icon(Icons.AutoMirrored.Filled.MenuBook, "菜单",
-                        tint = MaterialTheme.colorScheme.onBackground)
+        // 内容区单独作为 haze 源,底栏玻璃靠它取样(底栏是它的兄弟节点,不是后代)
+        val contentHazeState = remember { HazeState() }
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                // ---------- 顶栏(玻璃面板,模糊弥散光背景,延伸进状态栏后面) ----------
+                Box(Modifier.fillMaxWidth()
+                    .glassPanel()
+                    .topEdgeLine(edgeLineColor())) {
+                    Row(Modifier.fillMaxWidth().statusBarsPadding().height(52.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { scope.launch { drawer.open() } }) {
+                            Icon(Icons.AutoMirrored.Filled.MenuBook, "菜单",
+                                tint = MaterialTheme.colorScheme.onBackground)
+                        }
+                        Text(
+                            when {
+                                tab == 1 -> "消息"
+                                tab == 2 -> "热门"
+                                else -> "Share"
+                            },
+                            fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                            modifier = Modifier.weight(1f).padding(start = 4.dp))
+                        IconButton(onClick = { nav.navigate(Routes.search()) }) {
+                            Icon(Icons.Filled.Search, "搜索",
+                                tint = MaterialTheme.colorScheme.onBackground)
+                        }
+                        IconButton(onClick = { nav.navigate(Routes.COMPOSER) },
+                            modifier = Modifier.padding(end = 6.dp)) {
+                            Icon(Icons.Filled.Edit, "发微博",
+                                tint = MaterialTheme.colorScheme.onBackground)
+                        }
+                    }
                 }
-                Text(
-                    when {
-                        tab == 1 -> "消息"
-                        tab == 2 -> "热门"
-                        else -> "Share"
-                    },
-                    fontWeight = FontWeight.Bold, fontSize = 18.sp,
-                    modifier = Modifier.weight(1f).padding(start = 4.dp))
-                IconButton(onClick = { nav.navigate(Routes.search()) }) {
-                    Icon(Icons.Filled.Search, "搜索",
-                        tint = MaterialTheme.colorScheme.onBackground)
-                }
-                IconButton(onClick = { nav.navigate(Routes.COMPOSER) },
-                    modifier = Modifier.padding(end = 6.dp)) {
-                    Icon(Icons.Filled.Edit, "发微博",
-                        tint = MaterialTheme.colorScheme.onBackground)
+
+                // ---------- 内容 ----------
+                Box(Modifier.weight(1f)) {
+                    Box(Modifier.fillMaxSize().hazeSource(contentHazeState)) {
+                        if (tab == 1) {
+                            NotificationsPage(nav)
+                        } else if (tab == 2) {
+                            HotBoardPage(nav)
+                        } else {
+                            WeiboFeedTab(nav, cardNav, refreshTick)
+                        }
+                    }
+
+                    // FAB(悬浮右下,同原版“首页FAB按钮”)
+                    MaterialFab(
+                        onClick = { nav.navigate(Routes.COMPOSER) },
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
+                            .padding(end = 18.dp, bottom = 72.dp),
+                    ) { Icon(Icons.Filled.Edit, "发微博", tint = Color.White) }
                 }
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            // ---------- 内容 ----------
-            Box(Modifier.weight(1f)) {
-                if (tab == 1) {
-                    NotificationsPage(nav)
-                } else if (tab == 2) {
-                    HotBoardPage(nav)
-                } else {
-                    WeiboFeedTab(nav, cardNav, refreshTick)
-                }
-
-                // FAB(悬浮右下,同原版“首页FAB按钮”)
-                FloatingActionButton(
-                    onClick = { nav.navigate(Routes.COMPOSER) },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    shape = CircleShape,
-                    modifier = Modifier.align(Alignment.BottomEnd)
-                        .padding(end = 18.dp, bottom = 18.dp),
-                ) { Icon(Icons.Filled.Edit, "发微博") }
-            }
-
-            // ---------- 底栏(仿 Share:白底、选中蓝、无 M3 药丸指示器) ----------
-            HomeBottomBar(tabs = tabs, current = tab) { idx ->
+            // ---------- 底栏(玻璃,浮在内容之上,能模糊滚过的微博) ----------
+            HomeBottomBar(
+                tabs = tabs, current = tab,
+                hazeState = contentHazeState,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) { idx ->
                 if (tab == idx && SettingsStore.tapTabToRefresh) refreshTick++
                 tab = idx
             }
@@ -174,15 +186,18 @@ fun HomeScreen(nav: NavController) {
     }
 }
 
-/** 自定义底栏:图标 + 文案,选中态整列变主题蓝 */
+/** 自定义底栏:玻璃面板 + 图标/文案,选中态整列变主题蓝 */
 @Composable
 private fun HomeBottomBar(
     tabs: List<Triple<Int, String, ImageVector>>,
     current: Int,
+    hazeState: HazeState,
+    modifier: Modifier = Modifier,
     onSelect: (Int) -> Unit,
 ) {
-    Surface(color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 8.dp) {
+    Box(modifier.fillMaxWidth()
+        .glassPanel(state = hazeState)
+        .topEdgeLine(edgeLineColor())) {
         Row(Modifier.fillMaxWidth().navigationBarsPadding().height(56.dp)) {
             tabs.forEach { (idx, label, icon) ->
                 val selected = current == idx
@@ -335,7 +350,6 @@ private fun WeiboFeedTab(nav: NavController,
                         }
                         items(items, key = { it.mid }) { mblog ->
                             WeiboCard(mblog, cardNav, Modifier.animateItem())
-                            FeedDivider()
                         }
                         item(key = "footer") {
                             ListFooter(

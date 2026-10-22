@@ -29,6 +29,10 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.deyu.share.data.AppState
 import com.deyu.share.data.DraftStore
+import com.deyu.share.ui.theme.bottomEdgeLine
+import com.deyu.share.ui.theme.edgeLineColor
+import com.deyu.share.ui.theme.glassPanel
+import com.deyu.share.ui.theme.topEdgeLine
 import kotlinx.coroutines.launch
 
 /** 发博编辑器:全屏编辑、配图(开放平台两步流)、关闭时可选存草稿、可从草稿恢复 */
@@ -74,10 +78,14 @@ fun ComposerScreen(nav: NavController, draftId: Long = 0L) {
         if (text.isNotBlank() || picked != null) askDraft = true else close()
     }
 
-    Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
+    Scaffold(containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)) { pad ->
         Column(Modifier.fillMaxSize().padding(pad)) {
-            // 顶栏:关闭 / 标题 / 发布
-            Row(Modifier.fillMaxWidth().height(52.dp)
+            // 顶栏(玻璃):关闭 / 标题 / 发布
+            Box(Modifier.fillMaxWidth()
+                .glassPanel()
+                .bottomEdgeLine(edgeLineColor())) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().height(52.dp)
                 .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { requestClose() }) {
@@ -130,7 +138,7 @@ fun ComposerScreen(nav: NavController, draftId: Long = 0L) {
                 }
                 Spacer(Modifier.width(8.dp))
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
 
             Column(Modifier.weight(1f)) {
                 BasicTextField(
@@ -172,6 +180,8 @@ fun ComposerScreen(nav: NavController, draftId: Long = 0L) {
                     }
                 }
                 Row(Modifier.fillMaxWidth()
+                    .glassPanel()
+                    .topEdgeLine(edgeLineColor())
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { pickPic.launch("image/*") }) {

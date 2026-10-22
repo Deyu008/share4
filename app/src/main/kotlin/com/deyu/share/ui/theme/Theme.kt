@@ -1,6 +1,5 @@
 package com.deyu.share.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -15,50 +14,89 @@ import com.deyu.share.data.SettingsStore
 
 // Share 配色:白底 + 微博蓝主操作,夜间深蓝灰(原版 Share 的 Material 蓝系观感)
 private val WeiboBlue = Color(0xFF2861AD)
-private val Ink = Color(0xFF333333)          // Share 的正文墨色
-private val InkSecondary = Color(0xFF8A8A8A)  // 次级灰
-private val Hairline = Color(0xFFE9E9E9)
-private val SurfaceTint = Color(0xFFF5F6F8)
+private val Ink = Color(0xFF2B3038)              // Share 的正文墨色
+private val InkSecondary = Color(0xFF7C8593)    // 次级灰
 
+// 浅色:背景带一点冷调蓝,容器层级逐级加深(高级材质靠这组层级拉开纵深)
 private val LightScheme = lightColorScheme(
     primary = WeiboBlue,
     primaryContainer = Color(0xFFDCE7F5),
     onPrimary = Color.White,
     onPrimaryContainer = Color(0xFF12345F),
+    inversePrimary = Color(0xFFA8C8F0),
     secondary = Color(0xFFE8821E),   // 微博橙保留给点赞/热搜等强调位
     onSecondary = Color.White,
     // secondaryContainer 决定底栏/胶囊选中态;不定义会落回 M3 默认紫
     secondaryContainer = Color(0xFFE3EDFA),
     onSecondaryContainer = WeiboBlue,
     tertiary = Color(0xFFE2413E),
-    background = Color(0xFFF7F8FA),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFE1DF),
+    onTertiaryContainer = Color(0xFF6B0F0D),
+    background = Color(0xFFF2F5FA),
     onBackground = Ink,
-    surface = Color.White,
+    surface = Color(0xFFFCFDFF),
     onSurface = Ink,
-    surfaceVariant = SurfaceTint,
+    surfaceVariant = Color(0xFFEDF1F8),
     onSurfaceVariant = InkSecondary,
-    outlineVariant = Hairline,
+    surfaceTint = WeiboBlue,
+    inverseSurface = Color(0xFF2A2F37),
+    inverseOnSurface = Color(0xFFF0F2F6),
+    // 容器层级:卡片用 Lowest,浮层用 High/Highest
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF8FAFD),
+    surfaceContainer = Color(0xFFF1F4FA),
+    surfaceContainerHigh = Color(0xFFE9EDF6),
+    surfaceContainerHighest = Color(0xFFE1E7F2),
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceDim = Color(0xFFDCE1EA),
+    outline = Color(0xFFB9C1CD),
+    outlineVariant = Color(0xFFDDE3EC),
     error = Color(0xFFE2413E),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFE1DF),
+    onErrorContainer = Color(0xFF6B0F0D),
+    scrim = Color(0xFF000000),
 )
 
+// 深色:Share 夜间深蓝灰而非纯黑,容器层级同样逐级抬升
 private val DarkScheme = darkColorScheme(
     primary = Color(0xFF7FA6E0),
     primaryContainer = Color(0xFF2C3A52),
     onPrimary = Color(0xFF0B1626),
     onPrimaryContainer = Color(0xFFD6E3F7),
+    inversePrimary = Color(0xFF2861AD),
     secondary = Color(0xFFFF9E2C),
     onSecondary = Color(0xFF1A1000),
     secondaryContainer = Color(0xFF23344C),
     onSecondaryContainer = Color(0xFFCFE0F7),
     tertiary = Color(0xFFFF6B66),
-    background = Color(0xFF10141B),   // Share 夜间:深蓝灰而非纯黑
+    onTertiary = Color(0xFF3A0908),
+    tertiaryContainer = Color(0xFF6B2220),
+    onTertiaryContainer = Color(0xFFFFDAD7),
+    background = Color(0xFF0B0E13),
     onBackground = Color(0xFFDCE1E8),
-    surface = Color(0xFF171C25),
+    surface = Color(0xFF13171E),
     onSurface = Color(0xFFDCE1E8),
-    surfaceVariant = Color(0xFF1F2530),
+    surfaceVariant = Color(0xFF1C222C),
     onSurfaceVariant = Color(0xFF8B93A1),
-    outlineVariant = Color(0xFF2A3140),
+    surfaceTint = Color(0xFF7FA6E0),
+    inverseSurface = Color(0xFFDCE1E8),
+    inverseOnSurface = Color(0xFF23282F),
+    surfaceContainerLowest = Color(0xFF0A0D11),
+    surfaceContainerLow = Color(0xFF11151B),
+    surfaceContainer = Color(0xFF161A21),
+    surfaceContainerHigh = Color(0xFF1D222B),
+    surfaceContainerHighest = Color(0xFF262C36),
+    surfaceBright = Color(0xFF323945),
+    surfaceDim = Color(0xFF0B0E13),
+    outline = Color(0xFF464E5B),
+    outlineVariant = Color(0xFF2A303A),
     error = Color(0xFFF4212E),
+    onError = Color(0xFF3A0908),
+    errorContainer = Color(0xFF6B2220),
+    onErrorContainer = Color(0xFFFFDAD7),
+    scrim = Color(0xFF000000),
 )
 
 private val Type = Typography(

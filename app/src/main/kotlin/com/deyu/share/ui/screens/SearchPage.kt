@@ -46,9 +46,11 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.deyu.share.data.AppState
 import com.deyu.share.ui.components.EmptyState
-import com.deyu.share.ui.components.FeedDivider
 import com.deyu.share.ui.components.LoadingState
 import com.deyu.share.ui.components.WeiboCard
+import com.deyu.share.ui.theme.bottomEdgeLine
+import com.deyu.share.ui.theme.edgeLineColor
+import com.deyu.share.ui.theme.glassPanel
 import com.deyu.share.ui.components.cardNavOf
 import com.deyu.share4.protocol.HotWord
 import com.deyu.share4.protocol.WeiboMblog
@@ -88,8 +90,13 @@ fun SearchPage(nav: NavController, initialQuery: String = "") {
     }
 
     // 独立路由页:搜索框行即顶栏,须避开系统状态栏(edge-to-edge)
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 6.dp),
+    Column(Modifier.fillMaxSize()) {
+        // 玻璃顶栏(搜索框行)
+        Box(Modifier.fillMaxWidth()
+            .glassPanel()
+            .bottomEdgeLine(edgeLineColor())) {
+        Row(Modifier.fillMaxWidth().statusBarsPadding()
+            .padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { nav.popBackStack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回",
@@ -131,7 +138,7 @@ fun SearchPage(nav: NavController, initialQuery: String = "") {
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
                     .clickable(enabled = keyword.isNotBlank() && !searching) { doSearch(keyword) })
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+        }
 
         when {
             searching -> LoadingState()
@@ -153,7 +160,6 @@ fun SearchPage(nav: NavController, initialQuery: String = "") {
                 }
                 items(results, key = { it.mid }) { m ->
                     WeiboCard(m, cardNav)
-                    FeedDivider()
                 }
             }
             else -> HotSearchBoard(hotWords) { doSearch(it) }

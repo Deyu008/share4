@@ -5,21 +5,26 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -43,6 +48,9 @@ import com.deyu.share.ui.screens.StatusDetailScreen
 import com.deyu.share.ui.screens.VerifyScreen
 import com.deyu.share.ui.screens.VideoScreen
 import com.deyu.share.ui.screens.ViewerScreen
+import com.deyu.share.ui.theme.edgeLineColor
+import com.deyu.share.ui.theme.glassPanel
+import com.deyu.share.ui.theme.topEdgeLine
 
 object Routes {
     const val LOGIN = "login"
@@ -130,27 +138,25 @@ fun AppNav() {
     }
 }
 
-/** 收藏/草稿/私信路由页:统一带顶栏的脚手架包装 */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+/** 收藏/草稿/私信路由页:统一带玻璃顶栏的脚手架包装 */
 @Composable
 private fun Titled(title: String, nav: NavController, content: @Composable () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title, style = MaterialTheme.typography.titleMedium) },
-                navigationIcon = {
-                    IconButton(onClick = { nav.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground),
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad)) { content() }
+    Column(Modifier.fillMaxSize()) {
+        // 玻璃顶栏(延伸进状态栏后面)
+        Box(Modifier.fillMaxWidth()
+            .glassPanel()
+            .topEdgeLine(edgeLineColor())) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().height(52.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { nav.popBackStack() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回",
+                        tint = MaterialTheme.colorScheme.onBackground)
+                }
+                Text(title, style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground)
+            }
+        }
+        Box(Modifier.weight(1f).navigationBarsPadding()) { content() }
     }
 }
 

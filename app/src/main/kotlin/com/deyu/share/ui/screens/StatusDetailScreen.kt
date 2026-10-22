@@ -67,8 +67,12 @@ import com.deyu.share.ui.components.cardNavOf
 import com.deyu.share.ui.components.formatCount
 import com.deyu.share.ui.components.formatRelativeTime
 import com.deyu.share.ui.components.stripHtml
+import com.deyu.share.ui.theme.GlassBottomBar
+import com.deyu.share.ui.theme.GlassTopBar
 import com.deyu.share4.protocol.WeiboComment
 import com.deyu.share4.protocol.WeiboMblog
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
@@ -166,71 +170,41 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
+    // 评论列表作为 haze 源,底部评论条是它的兄弟节点 → 玻璃能模糊滚过的评论
+    val contentHazeState = remember { HazeState() }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            // ---------- 顶栏(玻璃) ----------
+            GlassTopBar(
                 title = { Text("微博正文", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(onClick = { nav.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回",
+                            tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground),
             )
-        },
-        bottomBar = {
-            if (state is DetailUiState.Ready) {
-                // 输入条:顶部一条细分割线,与内容区分开
-                Surface(color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 8.dp) {
-                    Row(Modifier.fillMaxWidth().imePadding()
-                        .navigationBarsPadding()
-                        .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = commentDraft, onValueChange = { commentDraft = it },
-                            placeholder = { Text("说点什么…", fontSize = 14.sp) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(20.dp),
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant,
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
-                            modifier = Modifier.weight(1f))
-                        Spacer(Modifier.width(8.dp))
-                        FilledIconButton(onClick = { sendComment() },
-                            enabled = commentDraft.isNotBlank() && !sending,
-                            modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Filled.Send, "发送", Modifier.size(18.dp))
+
+            // ---------- 内容 ----------
+            Box(Modifier.weight(1f).hazeSource(contentHazeState)) {
+                when (val s = state) {
+                    DetailUiState.Loading -> LoadingState()
+                    is DetailUiState.Error -> ErrorState(s.message, { load() })
+                    is DetailUiState.Ready -> {
+                        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                        val shouldLoadMore by androidx.compose.runtime.derivedStateOf {
+                            val info = listState.layoutInfo
+                            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+                            !loadingMore && !s.endReached && s.comments.size >= 20 &&
+                                info.totalItemsCount > 5 && last >= info.totalItemsCount - 3
                         }
-                    }
-                }
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when (val s = state) {
-                DetailUiState.Loading -> LoadingState()
-                is DetailUiState.Error -> ErrorState(s.message, { load() })
-                is DetailUiState.Ready -> {
-                    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-                    val shouldLoadMore by androidx.compose.runtime.derivedStateOf {
-                        val info = listState.layoutInfo
-                        val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        !loadingMore && !s.endReached && s.comments.size >= 20 &&
-                            info.totalItemsCount > 5 && last >= info.totalItemsCount - 3
-                    }
-                    LaunchedEffect(shouldLoadMore) {
-                        if (shouldLoadMore) loadMoreComments()
-                    }
-                    LazyColumn(state = listState,
-                        contentPadding = PaddingValues(bottom = 12.dp)) {
+                        LaunchedEffect(shouldLoadMore) {
+                            if (shouldLoadMore) loadMoreComments()
+                        }
+                        LazyColumn(state = listState,
+                            // 底部留出评论输入条的高度,最后一条不被遮挡
+                            contentPadding = PaddingValues(bottom = 76.dp)) {
                         item(key = "detail") {
                             WeiboCard(s.mblog, cardNav)
                             if (s.mblog.source.isNotBlank()) {
@@ -277,6 +251,38 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
                         }
                         item(key = "cmt_footer") {
                             ListFooter(if (s.endReached) "— 已经到底啦 —" else "上滑加载更多")
+                        }
+                    }
+                }
+            }
+        }
+        }
+        // 底部评论条(玻璃,浮在内容之上;与评论列表源是兄弟节点)
+        Box(Modifier.align(Alignment.BottomCenter)) {
+            if (state is DetailUiState.Ready) {
+                GlassBottomBar(state = contentHazeState) {
+                    Row(Modifier.fillMaxWidth().imePadding()
+                        .navigationBarsPadding()
+                        .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = commentDraft, onValueChange = { commentDraft = it },
+                            placeholder = { Text("说点什么…", fontSize = 14.sp) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            ),
+                            modifier = Modifier.weight(1f))
+                        Spacer(Modifier.width(8.dp))
+                        FilledIconButton(onClick = { sendComment() },
+                            enabled = commentDraft.isNotBlank() && !sending,
+                            modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Filled.Send, "发送", Modifier.size(18.dp))
                         }
                     }
                 }
