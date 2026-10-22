@@ -176,6 +176,8 @@ git push -u origin main     # 远端用户名必须是 Deyu008
 - 模拟器 AVD `share_test`，serial `emulator-5554`。
 - **安全红线（逐字保留）**：不用用户主微博账号做风控实验（测试用小号：uid 8417868306「质朴乌贼爱旅行」、5655585082「纸面师」，手机号 18128533280 只用于签名参数不落盘）；微博通讯协议忠实复刻不做「改进」；测试博文/点赞/评论须即时清理（无痕回归）；发私信只发给自己（uid 8417868306）且验证后 destroy_batch 清理；收藏测试后即时取消；测试草稿删除；手机上原版 Share(com.hengye.share) 是唯一能登录的参照物别动它；mmx API key 在 ~/.mmx/config.json 勿外泄。
 - **截图坐标坑**：截图存的是 1080×2400 原始像素，但显示时会被缩放。**按显示图坐标点击会偏 1.2 倍**，必须用 `uiautomator dump` 拿真实 bounds 再点。
+- **模拟器状态栏被裁（系统现象，不是 App bug，勿再查）**：AVD `share_test` 用的是 **pixel_6 设备画像**，模拟了 128px 高的居中挖孔；而状态栏窗口只有 63px（`dumpsys window displays` → `type=statusBars frame=[0,0][1080,63]`），SystemUI 为躲挖孔把时钟下压 32px（`mMinimalInsetsSizeInDisplayCutoutSafe=Insets{top=32}`）→ 越出窗口底边被裁。**Launcher（App 之外）同样被裁，改造前的历史截图也一样**。真机无此现象。
+- **状态栏/导航栏图标明暗必须跟 App 自己的三态走**：`enableEdgeToEdge()` 默认按**系统**深浅决定图标色；App 有独立三态时会出现「系统浅色 + App 深色 → 深色图标画在深色背景上 = 隐形」。已在 `Share4Theme` 里用 `WindowCompat.getInsetsController` 按 `darkTheme` 显式设置 `isAppearanceLightStatusBars` / `isAppearanceLightNavigationBars`（2026-10-22 修，已真机截图复核深/浅两态）。
 - 验证纪律：UI 判定必须以截图/像素证据为准，不能凭「应该开了」下结论。
 
 ---
