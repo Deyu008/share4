@@ -1,15 +1,21 @@
 package com.deyu.share.ui.theme
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import com.deyu.share.data.SettingsStore
 
 // Share 配色:白底 + 微博蓝主操作,夜间深蓝灰(原版 Share 的 Material 蓝系观感)
@@ -113,6 +119,10 @@ private val Type = Typography(
 
 /**
  * 应用主题:夜间模式三态(跟随系统/浅色/深色,对应原版“默认夜间主题”设置组)。
+ *
+ * 注意:状态栏/导航栏图标的明暗必须跟着 **App 自己的** 三态走。
+ * `enableEdgeToEdge()` 默认按**系统**深浅决定图标色,当系统是浅色而 App 切到深色时,
+ * 深色图标会画在深色背景上直接看不见(真机必现,模拟器上也能复现)。
  */
 @Composable
 fun Share4Theme(content: @Composable () -> Unit) {
@@ -121,9 +131,25 @@ fun Share4Theme(content: @Composable () -> Unit) {
         SettingsStore.DarkMode.DARK -> true
         SettingsStore.DarkMode.SYSTEM -> isSystemInDarkTheme()
     }
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = view.context.findActivity()?.window ?: return@SideEffect
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !darkTheme
+            controller.isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
     MaterialTheme(
         colorScheme = if (darkTheme) DarkScheme else LightScheme,
         typography = Type,
         content = content,
     )
+}
+
+/** 从 Context 里剥出 Activity(Compose 的 LocalContext 可能是 ContextWrapper) */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
