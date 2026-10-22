@@ -1,6 +1,8 @@
 package com.deyu.share.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,15 +13,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -41,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -51,8 +57,14 @@ import androidx.navigation.NavController
 import com.deyu.share.data.AppState
 import com.deyu.share.ui.components.Avatar
 import com.deyu.share.ui.components.CardNav
+import com.deyu.share.ui.components.EmptyState
+import com.deyu.share.ui.components.ErrorState
+import com.deyu.share.ui.components.FeedDivider
+import com.deyu.share.ui.components.ListFooter
+import com.deyu.share.ui.components.LoadingState
 import com.deyu.share.ui.components.WeiboCard
 import com.deyu.share.ui.components.cardNavOf
+import com.deyu.share.ui.components.formatCount
 import com.deyu.share4.protocol.WeiboMblog
 import com.deyu.share4.protocol.WeiboUserProfile
 import kotlinx.coroutines.launch
@@ -70,7 +82,7 @@ sealed interface ProfileUiState {
 
 /**
  * 用户主页:资料头(users/show)+ 关注/取关按钮(friendships/create|destroy)
- * + TA 的微博流(cardlist 分页)。头像可再点进嵌卡作者的主页,但不再点自己。
+ * + TA 的微博流(分页)。头像可再点进嵌卡作者的主页,但不再点自己。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -135,7 +147,8 @@ fun ProfileScreen(uid: String, nav: NavController) {
             TopAppBar(
                 title = {
                     Text((state as? ProfileUiState.Ready)?.profile?.screenName ?: "用户主页",
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium)
                 },
                 navigationIcon = {
                     IconButton(onClick = { nav.popBackStack() }) {
@@ -151,32 +164,27 @@ fun ProfileScreen(uid: String, nav: NavController) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (val s = state) {
-                ProfileUiState.Loading -> Box(Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(strokeWidth = 2.5.dp)
-                }
-                is ProfileUiState.Error -> Column(
-                    Modifier.fillMaxSize().padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center) {
-                    Text(s.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { load() }) { Text("重试") }
-                }
+                ProfileUiState.Loading -> LoadingState()
+                is ProfileUiState.Error -> ErrorState(s.message, { load() })
                 is ProfileUiState.Ready -> LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(bottom = 24.dp)) {
-                    item(key = "header") { ProfileHeader(s.profile, following) { target ->
-                        following = target   // 乐观更新,失败回滚
-                        scope.launch {
-                            val ok = AppState.client.friendship(uid, target)
-                            if (!ok) following = !target
-                            Toast.makeText(ctx, if (ok) "成功" else "失败",
-                                Toast.LENGTH_SHORT).show()
+                    item(key = "header") {
+                        ProfileHeader(s.profile, following) { target ->
+                            following = target   // 乐观更新,失败回滚
+                            scope.launch {
+                                val ok = AppState.client.friendship(uid, target)
+                                if (!ok) following = !target
+                                Toast.makeText(ctx, if (ok) "成功" else "失败",
+                                    Toast.LENGTH_SHORT).show()
+                            }
                         }
-                    } }
+                    }
                     item(key = "posts_title") {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        HorizontalDivider(thickness = 8.dp,
+                            color = MaterialTheme.colorScheme.surfaceVariant)
+                        Row(Modifier.fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Text("TA 的微博", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.width(8.dp))
@@ -185,18 +193,22 @@ fun ProfileScreen(uid: String, nav: NavController) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                    if (s.posts.isEmpty()) {
+                        item(key = "empty") {
+                            Box(Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                                contentAlignment = Alignment.Center) {
+                                Text("TA 还没有发过微博",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
                     items(s.posts, key = { it.mid }) { m ->
                         WeiboCard(m, cardNav)
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
-                            modifier = Modifier.padding(start = 76.dp))
+                        FeedDivider()
                     }
                     item(key = "footer") {
-                        Box(Modifier.fillMaxWidth().padding(16.dp),
-                            contentAlignment = Alignment.Center) {
-                            Text(if (s.endReached) "— 已经到底啦 —" else "上滑加载更多",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        ListFooter(if (s.endReached) "— 已经到底啦 —" else "上滑加载更多")
                     }
                 }
             }
@@ -208,10 +220,10 @@ fun ProfileScreen(uid: String, nav: NavController) {
 @Composable
 private fun ProfileHeader(p: WeiboUserProfile, following: Boolean?, onFollow: (Boolean) -> Unit) {
     val isSelf = AppState.session?.uid == p.uid
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(p.avatarHd, p.screenName, size = 76.dp)
-            Spacer(Modifier.width(16.dp))
+            Avatar(p.avatarHd, p.screenName, size = 72.dp)
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(p.screenName.ifBlank { "微博用户" },
@@ -221,37 +233,60 @@ private fun ProfileHeader(p: WeiboUserProfile, following: Boolean?, onFollow: (B
                     if (p.verified) {
                         Spacer(Modifier.width(4.dp))
                         Icon(Icons.Filled.CheckCircle, null,
-                            Modifier.height(18.dp), tint = Color(0xFFE8821E))
+                            Modifier.size(17.dp), tint = Color(0xFFE8821E))
                     }
                 }
                 p.verifiedReason?.let {
                     Text(it, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = Color(0xFFE8821E))
                 }
-                Text("uid ${p.uid}", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(if (p.gender == "f") "她" else "他",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (p.gender == "f" || p.gender == "m") {
+                        Text(if (p.gender == "f") "女" else "男",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(horizontal = 5.dp, vertical = 1.dp))
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    val loc = p.location
+                    if (loc.isNullOrBlank()) return@Row
+                    Icon(Icons.Outlined.LocationOn, null, Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(loc, fontSize = 12.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
         if (p.description.isNotBlank()) {
-            Spacer(Modifier.height(10.dp))
-            Text(p.description, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(12.dp))
+            Text(p.description, style = MaterialTheme.typography.bodyMedium,
+                lineHeight = 19.sp)
         }
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 HeaderStat(p.friends, "关注")
                 HeaderStat(p.followers, "粉丝")
                 HeaderStat(p.statuses, "微博")
             }
             if (!isSelf && following != null) {
                 if (following) {
-                    OutlinedButton(onClick = { onFollow(false) }) { Text("已关注") }
+                    OutlinedButton(onClick = { onFollow(false) },
+                        shape = RoundedCornerShape(18.dp),
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp)) {
+                        Text("已关注", fontSize = 14.sp)
+                    }
                 } else {
-                    Button(onClick = { onFollow(true) }) { Text("关注") }
+                    Button(onClick = { onFollow(true) },
+                        shape = RoundedCornerShape(18.dp),
+                        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 6.dp)) {
+                        Text("关注", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -260,12 +295,12 @@ private fun ProfileHeader(p: WeiboUserProfile, following: Boolean?, onFollow: (B
 
 @Composable
 private fun HeaderStat(value: Int, label: String) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text("$value", fontWeight = FontWeight.SemiBold,
+    Row(verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clickable { }) {
+        Text(formatCount(value), fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.width(3.dp))
         Text(label, style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 2.dp))
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

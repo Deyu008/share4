@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -27,6 +29,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,16 +56,20 @@ fun PremiumScreen(nav: NavController) {
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)
-            .padding(horizontal = 20.dp)) {
+            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState())) {
             // 徽章头
-            Row(Modifier.fillMaxWidth().padding(vertical = 18.dp),
+            Row(Modifier.fillMaxWidth()
+                .padding(top = 12.dp, bottom = 16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(52.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer,
-                        RoundedCornerShape(14.dp)),
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp)),
                     contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.WorkspacePremium, null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
+                        tint = Color.White, modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.width(14.dp))
                 Column {
@@ -71,11 +78,13 @@ fun PremiumScreen(nav: NavController) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            HorizontalDivider0()
             Text("高级功能", fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
-                modifier = Modifier.padding(vertical = 10.dp))
-            features.forEach { (name, note) ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 9.dp),
+                modifier = Modifier.padding(bottom = 6.dp))
+            features.forEachIndexed { i, (name, note) ->
+                Row(Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.CheckCircle, null, Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary)
@@ -86,20 +95,15 @@ fun PremiumScreen(nav: NavController) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                if (i < features.lastIndex) Spacer(Modifier.height(6.dp))
             }
-            HorizontalDivider0()
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(16.dp))
             Text("功能随版本逐步实装;解锁状态对所有已实装与后续功能立即生效。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(24.dp))
         }
     }
-}
-
-@Composable
-private fun HorizontalDivider0() {
-    androidx.compose.material3.HorizontalDivider(
-        color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 /** 关于页(仿 SettingAboutActivity) */

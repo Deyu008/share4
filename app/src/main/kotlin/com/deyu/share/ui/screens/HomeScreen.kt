@@ -1,6 +1,7 @@
 package com.deyu.share.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,9 +23,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
@@ -41,8 +44,8 @@ import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,10 +53,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,8 +80,12 @@ import com.deyu.share.data.AppState
 import com.deyu.share.data.SettingsStore
 import com.deyu.share.ui.Routes
 import com.deyu.share.ui.components.Avatar
+import com.deyu.share.ui.components.EmptyState
+import com.deyu.share.ui.components.FeedDivider
+import com.deyu.share.ui.components.ListFooter
 import com.deyu.share.ui.components.WeiboCard
 import com.deyu.share.ui.components.cardNavOf
+import com.deyu.share4.protocol.WeiboGroup
 import com.deyu.share4.protocol.WeiboMblog
 import kotlinx.coroutines.launch
 
@@ -91,11 +98,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(nav: NavController) {
     val scope = rememberCoroutineScope()
-    val ctx = LocalContext.current
-    val cardNav = remember { cardNavOf(nav) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
+    val cardNav = remember(nav) { cardNavOf(nav) }
     var tab by remember { mutableIntStateOf(0) }          // 0=微博 1=消息 2=热门
-    var lastTab by remember { mutableIntStateOf(-1) }
+    // 重复点击当前 tab 时自增,作为刷新信号(用计数器而非布尔,连续点两次也能触发)
+    var refreshTick by remember { mutableIntStateOf(0) }
     val tabs = remember(SettingsStore.hideHotTab) {
         listOfNotNull(
             Triple(0, "微博", Icons.Filled.Home as ImageVector),
@@ -144,8 +151,7 @@ fun HomeScreen(nav: NavController) {
                 } else if (tab == 2) {
                     HotBoardPage(nav)
                 } else {
-                    WeiboFeedTab(nav, cardNav,
-                        tapRefreshSignal = if (tab == lastTab && tab == 0) 1 else 0)
+                    WeiboFeedTab(nav, cardNav, refreshTick)
                 }
 
                 // FAB(悬浮右下,同原版“首页FAB按钮”)
@@ -159,22 +165,39 @@ fun HomeScreen(nav: NavController) {
                 ) { Icon(Icons.Filled.Edit, "发微博") }
             }
 
-            // ---------- 底栏 ----------
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp) {
-                tabs.forEach { (idx, label, icon) ->
-                    NavigationBarItem(
-                        selected = tab == idx,
-                        onClick = {
-                            // 重复点击当前 tab → 刷新(原版“当重复点击首页的tab时刷新”)
-                            if (tab == idx && SettingsStore.tapTabToRefresh && idx == 0) {
-                                lastTab = -1   // 置信号,触发 WeiboFeedTab 重载
-                            }
-                            tab = idx
-                        },
-                        icon = { Icon(icon, null) },
-                        label = { Text(label) },
-                    )
+            // ---------- 底栏(仿 Share:白底、选中蓝、无 M3 药丸指示器) ----------
+            HomeBottomBar(tabs = tabs, current = tab) { idx ->
+                if (tab == idx && SettingsStore.tapTabToRefresh) refreshTick++
+                tab = idx
+            }
+        }
+    }
+}
+
+/** 自定义底栏:图标 + 文案,选中态整列变主题蓝 */
+@Composable
+private fun HomeBottomBar(
+    tabs: List<Triple<Int, String, ImageVector>>,
+    current: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 8.dp) {
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(56.dp)) {
+            tabs.forEach { (idx, label, icon) ->
+                val selected = current == idx
+                val tint by animateColorAsState(
+                    if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tween(180), label = "tabTint")
+                Column(Modifier.weight(1f).fillMaxSize()
+                    .clickable { onSelect(idx) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center) {
+                    Icon(icon, label, Modifier.size(23.dp), tint = tint)
+                    Spacer(Modifier.height(2.dp))
+                    Text(label, fontSize = 11.sp, color = tint,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
                 }
             }
         }
@@ -182,16 +205,19 @@ fun HomeScreen(nav: NavController) {
 }
 
 /** 微博 tab:全部(关注)/ 热门 / 分组 三类流,顶部分组条横向滚动 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.components.CardNav,
-                         tapRefreshSignal: Int) {
+private fun WeiboFeedTab(nav: NavController,
+                         cardNav: com.deyu.share.ui.components.CardNav,
+                         refreshTick: Int) {
     val scope = rememberCoroutineScope()
-    var groups by remember { mutableStateOf<List<com.deyu.share4.protocol.WeiboGroup>>(emptyList()) }
+    var groups by remember { mutableStateOf<List<WeiboGroup>>(emptyList()) }
     // feedKind: 0=全部(关注) 1=热门 2=分组;groupId 在 kind==2 时生效
     var feedKind by remember { mutableIntStateOf(0) }
     var groupId by remember { mutableStateOf("") }
     var items by remember { mutableStateOf<List<WeiboMblog>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
     var banner by remember { mutableStateOf<String?>(null) }
     var pageNo by remember { mutableIntStateOf(1) }
     var endReached by remember { mutableStateOf(false) }
@@ -202,9 +228,10 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
         groups = runCatching { AppState.client.groups() }.getOrDefault(emptyList())
     }
 
-    fun load(reset: Boolean = true) {
+    fun load(reset: Boolean = true, pull: Boolean = false) {
         scope.launch {
-            loading = true; banner = null
+            if (pull) refreshing = true else loading = true
+            banner = null
             if (reset) { pageNo = 1; endReached = false }
             if (!logged) {
                 items = mockTimeline
@@ -213,11 +240,10 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
                 try {
                     val list = when (feedKind) {
                         0 -> AppState.client.friendsTimeline(page = pageNo)
-                        1 -> AppState.client.timeline(com.deyu.share4.protocol.WeiboClient.CID_HOT,
-                            page = pageNo)
+                        1 -> AppState.client.timeline(
+                            com.deyu.share4.protocol.WeiboClient.CID_HOT, page = pageNo)
                         else -> AppState.client.groupTimeline(groupId, page = pageNo)
                     }
-                    android.util.Log.d("Share4Tl", "feed=$feedKind/$groupId page $pageNo ok: ${list.size}")
                     items = if (reset) list else {
                         val seen = items.map { it.mid }.toSet()
                         items + list.filter { it.mid !in seen }
@@ -229,19 +255,22 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
                         else -> "分组暂无微博"
                     }
                 } catch (e: Exception) {
-                    android.util.Log.d("Share4Tl", "feed FAIL: ${e.message}")
                     banner = "加载失败:${e.message?.take(40)}"
                 }
             }
-            loading = false
+            loading = false; refreshing = false
         }
     }
-    LaunchedEffect(feedKind, groupId, logged, tapRefreshSignal) { load(true) }
+    // 切流时回到顶部,避免沿用上一条流的滚动位置
+    LaunchedEffect(feedKind, groupId, logged, refreshTick) {
+        listState.scrollToItem(0)
+        load(true)
+    }
 
     val shouldLoadMore by derivedStateOf {
         val info = listState.layoutInfo
         val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-        !loading && !endReached && items.size >= 10 &&
+        !loading && !refreshing && !endReached && items.size >= 10 &&
             info.totalItemsCount > 5 && last >= info.totalItemsCount - 3
     }
     LaunchedEffect(shouldLoadMore) {
@@ -253,10 +282,8 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
 
     Column(Modifier.fillMaxSize()) {
         // 顶部分组条:全部 / 热门 / 用户分组(横向滚动,原版为「全部+自定义分组」)
-        androidx.compose.foundation.lazy.LazyRow(
-            Modifier.fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-        ) {
+        LazyRow(Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 6.dp)) {
             item(key = "all") { FeedTabLabel("全部", feedKind == 0) { feedKind = 0 } }
             item(key = "hot") { FeedTabLabel("热门", feedKind == 1) { feedKind = 1 } }
             items(groups, key = { it.id }) { g ->
@@ -265,36 +292,60 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
                 }
             }
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+
         if (items.isEmpty() && loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(strokeWidth = 2.5.dp,
-                    color = MaterialTheme.colorScheme.primary)
-            }
+            com.deyu.share.ui.components.LoadingState()
         } else {
-            LazyColumn(state = listState,
-                contentPadding = PaddingValues(bottom = 12.dp)) {
-                banner?.let { b ->
-                    item(key = "banner") {
-                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            Text(b, style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = { load(true, pull = true) },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (items.isEmpty()) {
+                    // 空列表也要可下拉:用可滚动的空态容器
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                        item {
+                            Column(Modifier.fillParentMaxSize()) {
+                                EmptyState(
+                                    text = banner ?: "这里还没有内容",
+                                    icon = Icons.Filled.Home,
+                                    hint = if (!logged) "登录后查看关注的人发的微博" else null,
+                                    action = if (!logged) "去登录" else "刷新",
+                                    onAction = {
+                                        if (!logged) nav.navigate(Routes.LOGIN)
+                                        else load(true, pull = true)
+                                    },
+                                )
+                            }
                         }
                     }
-                }
-                items(items, key = { it.mid }) { mblog ->
-                    WeiboCard(mblog, cardNav, Modifier.animateItem())
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
-                        modifier = Modifier.padding(start = 76.dp))
-                }
-                item(key = "footer") {
-                    Box(Modifier.fillMaxWidth().padding(16.dp),
-                        contentAlignment = Alignment.Center) {
-                        Text(if (!logged) "— 登录后查看真实微博 —"
-                            else if (endReached) "— 已经到底啦 —"
-                            else if (loading) "加载中…"
-                            else "上滑加载更多",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyColumn(state = listState,
+                        // 底部留出 FAB 与底栏高度,最后一条不被遮挡
+                        contentPadding = PaddingValues(bottom = 88.dp)) {
+                        banner?.let { b ->
+                            item(key = "banner") {
+                                Box(Modifier.fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                    Text(b, style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                        items(items, key = { it.mid }) { mblog ->
+                            WeiboCard(mblog, cardNav, Modifier.animateItem())
+                            FeedDivider()
+                        }
+                        item(key = "footer") {
+                            ListFooter(
+                                when {
+                                    !logged -> "— 登录后查看真实微博 —"
+                                    endReached -> "— 已经到底啦 —"
+                                    loading -> "加载中…"
+                                    else -> "上滑加载更多"
+                                })
+                        }
                     }
                 }
             }
@@ -302,14 +353,21 @@ private fun WeiboFeedTab(nav: NavController, cardNav: com.deyu.share.ui.componen
     }
 }
 
+/** 分组/榜单切换标签:选中加粗变蓝,下方一条短指示条 */
 @Composable
 private fun FeedTabLabel(text: String, selected: Boolean, onClick: () -> Unit) {
-    TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = 6.dp)) {
-        Text(text,
-            fontSize = if (selected) 17.sp else 15.sp,
+    val color by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant, tween(160), label = "feedTabColor")
+    Column(Modifier.clickable(onClick = onClick)
+        .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text, fontSize = if (selected) 16.sp else 15.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) MaterialTheme.colorScheme.onBackground
-                    else MaterialTheme.colorScheme.onSurfaceVariant)
+            color = color, maxLines = 1)
+        Spacer(Modifier.height(3.dp))
+        Box(Modifier.height(2.5.dp).width(if (selected) 18.dp else 0.dp)
+            .background(color, RoundedCornerShape(2.dp)))
     }
 }
 
@@ -318,11 +376,13 @@ private fun FeedTabLabel(text: String, selected: Boolean, onClick: () -> Unit) {
 private fun HotBoardPage(nav: NavController) {
     var sub by remember { mutableIntStateOf(0) }   // 0=微博榜 1=热搜榜
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
             FeedTabLabel("微博榜", sub == 0) { sub = 0 }
             FeedTabLabel("热搜榜", sub == 1) { sub = 1 }
             Spacer(Modifier.weight(1f))
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
         AnimatedContent(targetState = sub, transitionSpec = {
             fadeIn(tween(240)).togetherWith(fadeOut(tween(160)))
         }, label = "hotSub") { s ->
@@ -345,7 +405,6 @@ private fun HotSearchPane(nav: NavController) {
 @Composable
 private fun ShareDrawerSheet(nav: NavController) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     val session = AppState.session
     var accounts by remember { mutableStateOf(AppState.accounts(ctx)) }
     var showSwitcher by remember { mutableStateOf(false) }
@@ -414,8 +473,7 @@ private fun ShareDrawerSheet(nav: NavController) {
                 else nav.navigate(Routes.LOGIN)
             }.padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Avatar(session?.avatarHd, session?.screenName ?: "客",
-                    size = 52.dp)
+                Avatar(session?.avatarHd, session?.screenName ?: "客", size = 52.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(session?.screenName ?: "未登录",
@@ -429,10 +487,6 @@ private fun ShareDrawerSheet(nav: NavController) {
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary)
                     }
-                }
-                if (session != null) {
-                    Icon(Icons.AutoMirrored.Filled.MenuBook, "切换",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

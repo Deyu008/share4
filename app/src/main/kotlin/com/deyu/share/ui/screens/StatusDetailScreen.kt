@@ -1,6 +1,8 @@
 package com.deyu.share.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,15 +13,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -27,19 +31,24 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,6 +58,10 @@ import androidx.navigation.NavController
 import com.deyu.share.data.AppState
 import com.deyu.share.ui.components.Avatar
 import com.deyu.share.ui.components.CardNav
+import com.deyu.share.ui.components.EmptyState
+import com.deyu.share.ui.components.ErrorState
+import com.deyu.share.ui.components.ListFooter
+import com.deyu.share.ui.components.LoadingState
 import com.deyu.share.ui.components.WeiboCard
 import com.deyu.share.ui.components.cardNavOf
 import com.deyu.share.ui.components.formatCount
@@ -71,7 +84,7 @@ sealed interface DetailUiState {
 }
 
 /**
- * 微博详情:正文卡片(cardlist mid 容器)+ 评论流(comments/show 分页)
+ * 微博详情:正文卡片(statuses/show)+ 评论流(comments/show 分页)
  * + 底部评论框(comments/create,成功后本地置顶)。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,7 +103,7 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
         )
     }
     var state by remember { mutableStateOf<DetailUiState>(DetailUiState.Loading) }
-    var page by remember { mutableStateOf(1) }
+    var page by remember { mutableIntStateOf(1) }
     var loadingMore by remember { mutableStateOf(false) }
     var commentDraft by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
@@ -100,10 +113,12 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
             state = DetailUiState.Loading
             try {
                 val detail = async { AppState.client.statusDetail(mid) }
-                val comments = async { runCatching { AppState.client.comments(mid) }
-                    .getOrDefault(emptyList()) }
+                val comments = async {
+                    runCatching { AppState.client.comments(mid) }.getOrDefault(emptyList())
+                }
                 val m = detail.await() ?: throw IllegalStateException("微博不存在或已删除")
-                state = DetailUiState.Ready(m, comments.await(), comments.await().isEmpty())
+                val list = comments.await()
+                state = DetailUiState.Ready(m, list, list.isEmpty())
             } catch (e: Exception) {
                 state = DetailUiState.Error(e.message ?: "加载失败")
             }
@@ -135,8 +150,7 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
         if (text.isBlank() || sending) return
         sending = true
         scope.launch {
-            val r = runCatching { AppState.client.commentCreate(mid, text) }
-                .getOrNull()
+            val r = runCatching { AppState.client.commentCreate(mid, text) }.getOrNull()
             val ok = r != null && (r.errno == null || r.errno == 0)
             if (ok) {
                 val me = AppState.session
@@ -155,7 +169,7 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("微博正文") },
+                title = { Text("微博正文", style = MaterialTheme.typography.titleMedium) },
                 navigationIcon = {
                     IconButton(onClick = { nav.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
@@ -168,17 +182,32 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
         },
         bottomBar = {
             if (state is DetailUiState.Ready) {
-                Row(Modifier.fillMaxWidth().imePadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = commentDraft, onValueChange = { commentDraft = it },
-                        placeholder = { Text("评论…") }, singleLine = true,
-                        modifier = Modifier.weight(1f))
-                    Spacer(Modifier.width(8.dp))
-                    FilledIconButton(onClick = { sendComment() },
-                        enabled = commentDraft.isNotBlank() && !sending) {
-                        Icon(Icons.Filled.Send, "发送")
+                // 输入条:顶部一条细分割线,与内容区分开
+                Surface(color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 8.dp) {
+                    Row(Modifier.fillMaxWidth().imePadding()
+                        .navigationBarsPadding()
+                        .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = commentDraft, onValueChange = { commentDraft = it },
+                            placeholder = { Text("说点什么…", fontSize = 14.sp) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            ),
+                            modifier = Modifier.weight(1f))
+                        Spacer(Modifier.width(8.dp))
+                        FilledIconButton(onClick = { sendComment() },
+                            enabled = commentDraft.isNotBlank() && !sending,
+                            modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Filled.Send, "发送", Modifier.size(18.dp))
+                        }
                     }
                 }
             }
@@ -187,18 +216,8 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (val s = state) {
-                DetailUiState.Loading -> Box(Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(strokeWidth = 2.5.dp)
-                }
-                is DetailUiState.Error -> Column(
-                    Modifier.fillMaxSize().padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center) {
-                    Text(s.message, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { load() }) { Text("重试") }
-                }
+                DetailUiState.Loading -> LoadingState()
+                is DetailUiState.Error -> ErrorState(s.message, { load() })
                 is DetailUiState.Ready -> {
                     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
                     val shouldLoadMore by androidx.compose.runtime.derivedStateOf {
@@ -210,44 +229,54 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
                     LaunchedEffect(shouldLoadMore) {
                         if (shouldLoadMore) loadMoreComments()
                     }
-                    LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 12.dp)) {
+                    LazyColumn(state = listState,
+                        contentPadding = PaddingValues(bottom = 12.dp)) {
                         item(key = "detail") {
                             WeiboCard(s.mblog, cardNav)
                             if (s.mblog.source.isNotBlank()) {
                                 Text("来自 ${s.mblog.source}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(start = 68.dp, bottom = 6.dp))
+                                    modifier = Modifier.padding(start = 68.dp, bottom = 10.dp))
                             }
-                            HorizontalDivider(thickness = 8.dp,
-                                color = MaterialTheme.colorScheme.surfaceVariant)
                         }
                         item(key = "cmt_title") {
-                            Text("评论 ${formatCount(s.mblog.comments)}",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                            Row(Modifier.fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text("评论", style = MaterialTheme.typography.titleSmall)
+                                Spacer(Modifier.width(6.dp))
+                                Text(formatCount(s.mblog.comments),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                         if (s.comments.isEmpty()) {
                             item(key = "cmt_empty") {
-                                Box(Modifier.fillMaxWidth().padding(24.dp),
+                                Box(Modifier.fillMaxWidth().padding(vertical = 40.dp),
                                     contentAlignment = Alignment.Center) {
-                                    Text("暂无评论,抢首评",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Outlined.ChatBubbleOutline, null,
+                                            Modifier.size(30.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                .copy(alpha = 0.5f))
+                                        Spacer(Modifier.height(8.dp))
+                                        Text("还没有评论,来抢首评",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                             }
                         }
                         items(s.comments, key = { it.mid + it.hashCode() }) { c ->
                             CommentItem(c)
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
-                                modifier = Modifier.padding(start = 68.dp))
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(start = 60.dp))
                         }
                         item(key = "cmt_footer") {
-                            Box(Modifier.fillMaxWidth().padding(14.dp),
-                                contentAlignment = Alignment.Center) {
-                                Text(if (s.endReached) "— 已经到底啦 —" else "上滑加载更多",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            ListFooter(if (s.endReached) "— 已经到底啦 —" else "上滑加载更多")
                         }
                     }
                 }
@@ -256,10 +285,10 @@ fun StatusDetailScreen(mid: String, nav: NavController) {
     }
 }
 
-/** 评论条目:小头像 + 昵称 + 时间 + 内容 + 赞数 */
+/** 评论条目:小头像 + 昵称 + 时间 + 内容 + 赞数;昵称点进主页 */
 @Composable
 private fun CommentItem(c: WeiboComment) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp)) {
         Avatar(c.avatar, c.userName, size = 34.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
@@ -269,17 +298,22 @@ private fun CommentItem(c: WeiboComment) {
                     modifier = Modifier.weight(1f, fill = false),
                     color = MaterialTheme.colorScheme.secondary)
                 Spacer(Modifier.width(6.dp))
-                Text("· ${formatRelativeTime(c.createdAt)}",
+                Text(formatRelativeTime(c.createdAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(3.dp))
             Text(stripHtml(c.text), style = MaterialTheme.typography.bodyMedium)
             if (c.likeCount > 0) {
-                Spacer(Modifier.height(2.dp))
-                Text("赞 ${formatCount(c.likeCount)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(4.dp))
+                Row(Modifier.clip(RoundedCornerShape(10.dp))
+                    .clickable {}
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("赞 ${formatCount(c.likeCount)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }

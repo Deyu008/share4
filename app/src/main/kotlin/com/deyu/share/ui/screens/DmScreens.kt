@@ -5,13 +5,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,13 +23,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.Badge
+import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +51,8 @@ import androidx.navigation.NavController
 import com.deyu.share.data.AppState
 import com.deyu.share.ui.Routes
 import com.deyu.share.ui.components.Avatar
+import com.deyu.share.ui.components.EmptyState
+import com.deyu.share.ui.components.LoadingState
 import com.deyu.share.ui.components.formatRelativeTime
 import com.deyu.share.ui.components.stripHtml
 import com.deyu.share4.protocol.WeiboConversation
@@ -67,48 +75,54 @@ fun DmUsersScreen(nav: NavController) {
         loading = false
     }
 
-    Column(Modifier.fillMaxSize()) {
-        when {
-            loading -> Box(Modifier.fillMaxWidth().padding(40.dp),
-                contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(strokeWidth = 2.5.dp)
-            }
-            error != null && users.isEmpty() -> Box(Modifier.fillMaxWidth().padding(40.dp),
-                contentAlignment = Alignment.Center) {
-                Text(error ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            users.isEmpty() -> Box(Modifier.fillMaxWidth().padding(40.dp),
-                contentAlignment = Alignment.Center) {
-                Text("暂无私信会话", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            else -> LazyColumn {
-                items(users, key = { it.uid }) { u ->
-                    Row(Modifier.fillMaxWidth()
-                        .clickable { nav.navigate(Routes.dmChat(u.uid, u.name)) }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(u.avatar, u.name, size = 48.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(u.name, fontSize = 15.sp,
-                                style = MaterialTheme.typography.titleSmall)
-                            Text(stripHtml(u.lastText), fontSize = 13.sp, maxLines = 1,
+    when {
+        loading -> LoadingState()
+        error != null && users.isEmpty() -> EmptyState(
+            text = "私信加载失败", icon = Icons.Outlined.MailOutline, hint = error)
+        users.isEmpty() -> EmptyState(
+            text = "暂无私信会话",
+            icon = Icons.Outlined.MailOutline,
+            hint = "在用户主页可以给 TA 发私信",
+        )
+        else -> LazyColumn {
+            items(users, key = { it.uid }) { u ->
+                Row(Modifier.fillMaxWidth()
+                    .clickable { nav.navigate(Routes.dmChat(u.uid, u.name)) }
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(u.avatar, u.name, size = 46.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(u.name, fontSize = 15.sp, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.weight(1f, fill = false))
+                            Spacer(Modifier.width(8.dp))
+                            Text(formatRelativeTime(u.lastAt),
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Column(horizontalAlignment = Alignment.End) {
+                        Spacer(Modifier.height(3.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(stripHtml(u.lastText), fontSize = 13.sp, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f))
                             if (u.unread > 0) {
-                                Badge { Text("${u.unread}") }
-                            } else {
-                                Text(formatRelativeTime(u.lastAt),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.width(8.dp))
+                                Box(Modifier.size(18.dp)
+                                    .background(MaterialTheme.colorScheme.error, RoundedCornerShape(9.dp)),
+                                    contentAlignment = Alignment.Center) {
+                                    Text(if (u.unread > 99) "99+" else "${u.unread}",
+                                        color = Color.White, fontSize = 10.sp)
+                                }
                             }
                         }
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
-                        modifier = Modifier.padding(start = 76.dp))
                 }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(start = 74.dp))
             }
         }
     }
@@ -123,6 +137,7 @@ fun DmChatScreen(uid: String, name: String, nav: NavController) {
     var error by remember { mutableStateOf<String?>(null) }
     var draft by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
+    var sendError by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     val me = AppState.session?.uid
 
@@ -144,45 +159,71 @@ fun DmChatScreen(uid: String, name: String, nav: NavController) {
         val text = draft.trim()
         if (text.isBlank() || sending) return
         sending = true
+        sendError = null
         scope.launch {
             val sent = AppState.client.dmSend(uid, text)
             if (sent != null) {
                 messages = messages + sent
                 draft = ""
+            } else {
+                sendError = "发送失败:对方只接受互相关注用户的私信,或已被限制"
             }
             sending = false
         }
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
+        if (sendError != null) {
+            Text(sendError ?: "", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f))
+                    .padding(horizontal = 16.dp, vertical = 6.dp))
+        }
         Box(Modifier.weight(1f)) {
             when {
-                loading -> CircularProgressIndicator(strokeWidth = 2.5.dp,
-                    modifier = Modifier.align(Alignment.Center))
+                loading -> LoadingState()
                 error != null && messages.isEmpty() ->
-                    Text(error ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.align(Alignment.Center))
+                    EmptyState("私信加载失败", icon = Icons.Outlined.MailOutline, hint = error)
+                messages.isEmpty() -> EmptyState(
+                    text = "还没有聊过天",
+                    icon = Icons.Outlined.MailOutline,
+                    hint = "发一条消息打个招呼吧",
+                )
                 else -> LazyColumn(state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        horizontal = 14.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(messages, key = { it.id }) { m ->
                         MessageBubble(m, mine = m.senderId == me)
                     }
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = draft, onValueChange = { draft = it },
-                placeholder = { Text("发私信…") }, singleLine = true,
-                modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(8.dp))
-            FilledIconButton(onClick = { send() },
-                enabled = draft.isNotBlank() && !sending) {
-                Icon(Icons.Filled.Send, "发送")
+        Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
+            Row(Modifier.fillMaxWidth().navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = draft, onValueChange = { draft = it },
+                    placeholder = { Text("发私信…", fontSize = 14.sp) }, singleLine = true,
+                    shape = RoundedCornerShape(20.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                FilledIconButton(onClick = { send() },
+                    enabled = draft.isNotBlank() && !sending,
+                    modifier = Modifier.size(40.dp)) {
+                    if (sending) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary)
+                    else Icon(Icons.Filled.Send, "发送", Modifier.size(18.dp))
+                }
             }
         }
     }
@@ -201,18 +242,17 @@ private fun MessageBubble(m: WeiboDirectMessage, mine: Boolean) {
         Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
             Box(
                 Modifier
-                    .widthIn(max = 280.dp)
+                    .widthIn(max = 272.dp)
                     .clip(RoundedCornerShape(
-                        topStart = if (mine) 14.dp else 3.dp,
-                        topEnd = if (mine) 3.dp else 14.dp,
-                        bottomStart = 14.dp, bottomEnd = 14.dp))
+                        topStart = if (mine) 16.dp else 4.dp,
+                        topEnd = if (mine) 4.dp else 16.dp,
+                        bottomStart = 16.dp, bottomEnd = 16.dp))
                     .background(
                         if (mine) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)) {
-                Text(stripHtml(m.text), fontSize = 15.sp, lineHeight = 20.sp,
-                    color = if (mine) androidx.compose.ui.graphics.Color.White
-                            else MaterialTheme.colorScheme.onSurface)
+                    .padding(horizontal = 12.dp, vertical = 9.dp)) {
+                Text(stripHtml(m.text), fontSize = 15.sp, lineHeight = 21.sp,
+                    color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface)
             }
             Text(formatRelativeTime(m.createdAt),
                 style = MaterialTheme.typography.labelSmall,

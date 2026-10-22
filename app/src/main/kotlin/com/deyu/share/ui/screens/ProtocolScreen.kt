@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,7 @@ fun ProtocolScreen(nav: NavController) {
         })
     }
     var busy by remember { mutableStateOf(false) }
+    var midInput by remember { mutableStateOf("") }
     fun append(s: String) { log = s + "\n" + log }
 
     Scaffold(topBar = { TopAppBar(title = { Text("协议验证") }) }) { pad ->
@@ -59,6 +61,24 @@ fun ProtocolScreen(nav: NavController) {
                         } catch (e: Exception) { append("✗ ${e.message}") }
                         busy = false }
                 }) { Text("关注流") }
+            }
+            Spacer(Modifier.height(8.dp))
+            // 长文探测:statuses/extend 拉完整正文
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = midInput, onValueChange = { midInput = it },
+                    label = { Text("mid", style = MaterialTheme.typography.labelSmall) },
+                    singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedButton(enabled = !busy && midInput.isNotBlank(), onClick = {
+                    busy = true; scope.launch {
+                        try {
+                            append("→ statuses/extend ${midInput.trim()}…")
+                            val t = client.longText(midInput.trim())
+                            append(if (t != null) "✓ 长文 ${t.length} 字\n头:${t.take(50)}\n尾:${t.takeLast(60)}"
+                                   else "✗ 无长文返回")
+                        } catch (e: Exception) { append("✗ ${e.message}") }
+                        busy = false }
+                }) { Text("长文") }
             }
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(

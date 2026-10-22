@@ -22,3 +22,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# 验收截图(过程产物,不入库)
+shots/
+.tmp_shots/
