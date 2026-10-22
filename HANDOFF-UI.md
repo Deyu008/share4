@@ -15,6 +15,7 @@ UI 全面优化已**改完并逐页真机截图验收通过**（浅色/深色均
 | 代码可编译 | ✅ `assembleDebug` 通过（exit=0） |
 | 装机验证 | ✅ 已装 emulator-5554，长文正文真机验证通过 |
 | 长文正文 | ✅ **已解决**（见 §3，端点为 m.weibo.cn/statuses/extend） |
+| 高级材质改造 | ✅ **已完成**（见 §2.6，HyperOS 4 风格毛玻璃/弥散光，浅色+深色真机验收） |
 | git | ✅ 本轮改动已 commit（拆 2 个 commit） |
 | 推送 | ❌ 本地累计 13 个 commit 未推送（等用户开 7890 代理） |
 
@@ -62,6 +63,48 @@ UI 全面优化已**改完并逐页真机截图验收通过**（浅色/深色均
 - 切换流/刷新时 `scrollToItem(0)` 回顶部。
 - 列表底部统一留 88dp，避免被 FAB 和底栏遮挡。
 - `AppNav.kt` 统一 `Titled()` 顶栏字号。
+
+### 2.6 高级材质改造（HyperOS 4 风格，2026-10-22 第二轮）
+
+**背景**：`haze:1.2.2` 早就在 `build.gradle.kts` 里声明了，但代码里**一次都没用过**，
+全 App 是扁平 Material 色块（纯白卡片平铺 + 分割线 + 纯色底栏），观感扁平。
+
+**新增 `ui/theme/Material.kt`** —— 高级材质组件层，三件套：
+| 组件 | 作用 |
+|---|---|
+| `DiffuseBackground` | 全屏**弥散光背景**：底色之上浮 4 团大尺度柔和色斑（品牌蓝/柔紫/青/暖橙），给毛玻璃提供"背后有东西可模糊"的内容 |
+| `Modifier.glassPanel(state,…)` | 基于 haze(RenderEffect) 的**真毛玻璃**：背景模糊 + 半透明色罩 + 细颗粒(noise 0.045) |
+| `Modifier.hairlineStroke` / `topEdgeLine` / `bottomEdgeLine` | **渐变高光描边**：面板边缘中间亮两侧淡，是"浮起来"的关键一笔 |
+| `Modifier.cardSurface` | 浮起卡片表面：大圆角(20dp) + 柔和宽投影 + 渐变描边 |
+| `MaterialFab` | 自绘 FAB：品牌渐变 + 柔和投影 + 上缘高光（M3 的 FAB 只能纯色） |
+| `GlassTopBar` / `GlassBottomBar` | 统一顶栏/底栏玻璃容器 |
+
+**主题升级**：`Theme.kt` 补齐 M3 全部 surface 容器层级
+（`surfaceContainerLowest/Low/Container/High/Highest` + `surfaceBright/surfaceDim`），
+浅色偏冷调蓝、深色深蓝灰。
+
+**关键坑（已踩，勿回退）**：haze 的效果节点会**跳过"正在绘制的祖先源"区域**
+（`HazeArea.contentDrawing` 标志）。所以：
+- 玻璃面板放在 `hazeSource` **内部** → 取不到样本，**只剩色罩不模糊**（第一版就是这个症状）；
+- 正确做法：玻璃面板必须是源的**兄弟节点**，或用**另一个 HazeState** 去模糊别的源。
+  本项目因此拆成两个 state：
+  - `LocalHazeState` → 源 = 弥散光背景（根容器），顶栏玻璃用它；
+  - 页面内 `contentHazeState` → 源 = 页面内容区，底栏/输入条玻璃用它（底栏是源的兄弟）。
+
+**布局改造**：底栏/输入条从"参与布局的下层"改成"**浮在内容之上**"，
+内容区因此要延伸到底栏后面（LazyColumn 的 `contentPadding.bottom` 相应加大）。
+
+**清单**：
+- 首页：顶栏玻璃、底栏玻璃（浮在内容上，能模糊滚过的微博）、FAB 渐变、微博卡片浮起化
+- 详情页：顶栏玻璃、底部评论条玻璃（浮层）、评论区做源
+- 搜索页：搜索框行玻璃顶栏
+- 发博页：顶栏玻璃、底部工具条玻璃
+- 私信聊天页：底部输入条玻璃、消息流做源
+- 设置/基本设置/高级版/关于/个人页：顶栏换 `GlassTopBar`
+- 收藏/草稿/私信列表：`AppNav.Titled` 顶栏玻璃化
+- 列表分隔线 `FeedDivider` 全部删除（卡片浮起后不需要）
+- 根容器补 `LocalContentColor = onBackground`（自绘卡片/顶栏没有 Surface 提供 contentColor，
+  默认黑色在深色模式下会看不见——昵称和"Share"标题曾因此几乎不可见，已修）
 
 ---
 
@@ -143,3 +186,9 @@ git push -u origin main     # 远端用户名必须是 Deyu008
 长文：首页长微博「查看全文」入口出现 ✓、点击后正文变长并出现「收起」✓；
 **2026-10-22 复核：正文已为全文（1178 字），尾部到「#2027款元UP飞驰版焕新上市#」自然结尾**；
 详情页同一路径复核通过 ✓。
+
+高级材质（2026-10-22 第二轮，截图见 `shots/material-*.png`）：
+浅色首页 ✓（弥散光背景 + 玻璃底栏能模糊滚过的微博 + 浮起卡片 + 渐变 FAB）；
+详情页 ✓（玻璃顶栏 + 底部评论条玻璃）；搜索页 ✓；基本设置 ✓；我的收藏 ✓；
+深色首页 ✓、深色发博页 ✓。
+深色下发现并修复：昵称/顶栏标题不可见（缺 LocalContentColor）、卡片比背景还暗（改用 surfaceContainer）。
