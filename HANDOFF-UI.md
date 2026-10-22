@@ -64,27 +64,28 @@ UI 全面优化已**改完并逐页真机截图验收通过**（浅色/深色均
 **旧图标**：纯色 `#1565C0` 底 + 四节点网络图（3px 细连线，小尺寸下发虚），
 既不表达「微博客户端」，也跟新的高级材质主题不搭。
 
-**新图标**：白色眼形轮廓（杏仁形外框 + 虹膜环）+ 橙色瞳孔 `#E8821E`，
-微博蓝渐变底 + 左上柔光 + 右下暖光，与 App 主题的弥散光背景同一套语言。
+**新图标**：保留原版的「四节点网络」意象，但把执行做精致——
+- **几何对称化**：原来上中枢纽 + 左/下/右三个散乱节点、连线交错；
+  改成上中枢纽 + 左/右/下三节点连成一个**对称菱形环**，负空间均衡
+- **节点做珠光**：径向渐变 + 左上高光，枢纽最大、三个卫星节点略小
+- **强调色**：右节点用主题橙 `#E8821E`，带一层柔光晕（焦点唯一）
+- **底板有纵深**：微博蓝对角渐变 `#3E86D6 → #22559F → #0D2A54`
+  + 左上柔光 + 右下暖光，与 App 的弥散光背景同一套语言
+- **连线**：4 单位圆头圆角描边，半透明白
 
-**产物**：
-- `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_fg.png` — 前景（带透明通道的主体）
-- `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_bg.png` — 背景（蓝渐变 + 柔光）
-- `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher_mono.png` — 单色层（Android 13+ 主题图标）
-- `mipmap-{...}dpi/ic_launcher.png` / `ic_launcher_round.png` — 旧版圆角 / 圆形图标
-- `mipmap-anydpi-v26/ic_launcher.xml` / `ic_launcher_round.xml` — adaptive-icon（bg + fg + mono）
+**产物**（矢量为唯一事实来源，`res/drawable/ic_launcher_*.xml`）：
+- `drawable/ic_launcher_bg.xml` — 底板（渐变 + 双柔光）
+- `drawable/ic_launcher_fg.xml` — 前景（连线 + 珠光节点 + 橙色光晕）
+- `drawable/ic_launcher_mono.xml` — 单色层（Android 13+ 主题图标）
+- `mipmap-anydpi-v26/ic_launcher.xml` / `ic_launcher_round.xml` — adaptive-icon
 - `design/icon-512.png` — 商店上架用 512×512
-- 旧的 `drawable/ic_launcher_bg.xml` / `ic_launcher_fg.xml` 向量已删除
 - Manifest 增加 `android:roundIcon="@mipmap/ic_launcher_round"`
+- minSdk 26，adaptive-icon 全覆盖，**不再需要各密度 PNG**（APK 比原来还小）
 
-**可复现**：`tools/icon/build_icon.ps1` + `tools/icon/IconTool.cs`（纯 System.Drawing，无第三方包），
-源图 `tools/icon/icon-source.jpg`。改完跑一次即可重新生成全部密度：
-```powershell
-cd E:\Code\Share\share4
-.\tools\icon\build_icon.ps1
-```
-抠像做法：源图是白主体 + 黑底，按亮度做 alpha 渐变（`lo=45 / hi=120`），
-主体按包围盒缩放到 60%（自适应图标安全区是 66/108）。
+**重新生成商店图**：`tools/icon/render_store_icon.ps1` + `tools/icon/IconGraph.cs`
+（纯 System.Drawing，几何与矢量一一对应；只用了最基础的 GDI+ API，
+因为部分 PowerShell 沙箱里 `Add-Type` 暴露的是精简版 System.Drawing，
+`LinearGradientBrush` 的多档构造与 `ColorBlend` 都不可用，故背景改为逐像素计算）。
 
 ### 2.6 高级材质改造（HyperOS 4 风格，2026-10-22 第二轮）
 
