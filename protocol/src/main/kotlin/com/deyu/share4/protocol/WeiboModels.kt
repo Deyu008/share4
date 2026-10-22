@@ -241,8 +241,17 @@ data class WeiboMblog(
     val retweetedPics: List<String> = emptyList(),
     val isLongText: Boolean = false,
     val favorited: Boolean = false,
+    /** 当前账号是否已赞(部分接口给 attitudes_status/liked,缺省视为未赞) */
+    val liked: Boolean = false,
+    /**
+     * 长文完整正文(mblog.longText.longTextContent)。
+     * 2026 服务端已不再下发该字段(原版 Share 的 mblog 模型里有),
+     * 完整正文改走 m.weibo.cn/statuses/extend 实时拉取,见 WeiboClient.longText。
+     */
+    val longText: String? = null,
 ) {
-    val plainText: String get() = text
+    /** 展示用正文:长文优先取完整版 */
+    val plainText: String get() = (longText?.takeIf { it.isNotBlank() } ?: text)
         .replace(Regex("<br\\s*/?>"), "\n")
         .replace(Regex("<[^>]+>"), "")
 }
@@ -334,6 +343,10 @@ object CardlistParser {
             retweetedPics = pics(rt),
             isLongText = m.str("isLongText")?.toBooleanStrictOrNull() ?: false,
             favorited = m.str("favorited")?.toBooleanStrictOrNull() ?: false,
+            liked = (m.int("attitudes_status") ?: 0) == 1 ||
+                (m.str("liked")?.toBooleanStrictOrNull() ?: false),
+            longText = m["longText"]?.let { runCatching { it.jsonObject }.getOrNull() }
+                ?.str("longTextContent"),
         )
     }
 }

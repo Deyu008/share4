@@ -626,6 +626,71 @@ class WeiboClient(
         if (obj.str("mid") == null && obj.str("id") == null) null else CardlistParser.parseMblog(obj)
     }
 
+    /**
+     * 长文完整正文(返回原始 HTML 文本,调用方自行剥壳)。
+     *
+     * 2026-10-22 真机实测结论:
+     * - m-api 的 statuses/friends_timeline 与 statuses/show 都只给截断的 text(140 字);
+     * - m-api statuses/extend 返回的是详情页附加信息(favorited/comment_privilege),
+     *   共 67 个顶层键,不含正文;
+     * - weibo.com/ajax/statuses/show?id={数字id} 返回的 text 尾部带
+     *   `...<span class="expand">展开</span>` 截断标记(268 字),仍非全文;
+     * - **m.weibo.cn/statuses/extend?id={mid} 返回全文**:
+     *   `{"data":{"longTextContent":"..."}}`,实测同一条微博 1178 字(原始 HTML),
+     *   尾部是完整结尾,不再是截断摘要。用 .weibo.cn 的 SUB 票据(与 .weibo.com 的
+     *   webSubCom 是两套),Referer 指向 m.weibo.cn/detail/{mid}。
+     *
+     * 首选 m.weibo.cn;失败才退回 weibo.com 的降级通道(该通道本身仍截断,
+     * 只用于 m.weibo.cn 不可用时多给一点内容)。
+     */
+    suspend fun longText(mid: String, id: String? = null): String? = withContext(Dispatchers.IO) {
+        val target = id?.takeIf { it.isNotBlank() } ?: mid
+        // 候选 1:m.weibo.cn 的长文接口(.weibo.cn SUB)
+        session?.webSub?.let { sub ->
+            runCatching {
+                val req = Request.Builder()
+                    .url("https://m.weibo.cn/statuses/extend?id=$target")
+                    .header("User-Agent", WEB_UA)
+                    .header("Referer", "https://m.weibo.cn/detail/$target")
+                    .header("Accept", "application/json, text/plain, */*")
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .header("Cookie", "SUB=$sub")
+                    .get().build()
+                val body = http.newCall(req).execute().use { it.body?.string() ?: "" }
+                val obj = WeiboJson.parse(body)
+                val t = obj?.get("data")?.let { runCatching { it.jsonObject }.getOrNull() }
+                    ?.str("longTextContent")
+                    ?: obj?.str("longTextContent")
+                t
+            }.getOrNull()?.takeIf { it.isNotBlank() }?.let { return@withContext it }
+        }
+        // 候选 2:weibo.com 的单条微博接口(.weibo.com SUB)
+        // 降级通道:该接口的 text 仍带 "...<span class="expand">展开</span>" 截断标记,
+        // 剥掉标记再返回,免得 UI 把截断摘要当成全文。
+        val sub2 = session?.webSubCom ?: return@withContext null
+        runCatching {
+            val req = Request.Builder()
+                .url("https://weibo.com/ajax/statuses/show?id=$target")
+                .header("User-Agent", WEB_UA)
+                .header("Referer", "https://weibo.com/")
+                .header("Accept", "application/json, text/plain, */*")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Cookie", "SUB=$sub2")
+                .get().build()
+            val body = http.newCall(req).execute().use { it.body?.string() ?: "" }
+            val obj = WeiboJson.parse(body) ?: return@runCatching null
+            obj.str("text")
+                ?: obj.get("data")?.let { runCatching { it.jsonObject }.getOrNull() }
+                    ?.str("text")
+                ?: obj.get("longText")?.let { runCatching { it.jsonObject }.getOrNull() }
+                    ?.str("longTextContent")
+        }.getOrNull()?.takeIf { it.isNotBlank() }?.let { txt ->
+            txt.replace(Regex("<span class=\"expand\">.*?</span>"), "")
+                .replace(Regex("\\.{3}\\s*$"), "")
+                .trim()
+        }
+    }
+
     /** 评论流(comments/show,id=mid,page) */
     suspend fun comments(mid: String, page: Int = 1): List<WeiboComment> = withContext(Dispatchers.IO) {
         ensureAid()
